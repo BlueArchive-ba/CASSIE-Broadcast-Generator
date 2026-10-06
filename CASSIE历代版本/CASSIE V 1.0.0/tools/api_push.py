@@ -20,7 +20,11 @@ import subprocess
 import sys
 
 REPO = 'BlueArchive-ba/CASSIE-Broadcast-Generator'
-ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+# 本脚本在 <仓库根>/CASSIE历代版本/CASSIE V 1.0.0/tools/ 下，
+# 要上溯三层才是仓库根。少算一层会对着版本目录跑 git，
+# 结果把 27 个文件当成"整个仓库"，误删远端 81 个文件（已发生过一次）。
+ROOT = os.path.dirname(os.path.dirname(os.path.dirname(
+    os.path.dirname(os.path.abspath(__file__)))))
 BRANCH = 'main'
 
 
@@ -112,12 +116,19 @@ def main():
     parser = argparse.ArgumentParser(description='通过 GitHub API 推送')
     parser.add_argument('--dry-run', action='store_true', help='只显示改动')
     parser.add_argument('--message', help='覆盖提交信息')
+    parser.add_argument('--yes', action='store_true',
+                        help='改动超过 30 个文件时仍需确认才会推送')
     opts = parser.parse_args()
+
+    # 先确认仓库根找对了：文件数太少说明路径算错，宁可拒绝也不要误删远端
+    if not os.path.isdir(os.path.join(ROOT, '.git')):
+        raise SystemExit('仓库根判断错误（{} 下没有 .git），拒绝执行'.format(ROOT))
 
     remote_head = api('repos/{}/git/ref/heads/{}'.format(REPO, BRANCH))['object']['sha']
     local_head = git('rev-parse', 'HEAD')
     base_tree = api('repos/{}/git/commits/{}'.format(REPO, remote_head))['tree']['sha']
 
+    print('  仓库根  : {}'.format(ROOT))
     print('  远端 HEAD: {}  树 {}'.format(remote_head[:8], base_tree[:12]))
     print('  本地 HEAD: {}'.format(local_head[:8]))
 
@@ -139,6 +150,12 @@ def main():
     if opts.dry_run:
         print('  （--dry-run，未推送）')
         return
+
+    # 删除量异常大时要求显式确认：多半是仓库根或分支判断错了
+    if len(removed) > 30 and not opts.yes:
+        raise SystemExit(
+            '  删除 {} 个文件，数量异常，已中止。\n'
+            '  确认无误的话加 --yes 重新运行。'.format(len(removed)))
 
     tree_sha = build_tree('', local, remote)
     message = opts.message or git('log', '-1', '--pretty=%B', local_head)
