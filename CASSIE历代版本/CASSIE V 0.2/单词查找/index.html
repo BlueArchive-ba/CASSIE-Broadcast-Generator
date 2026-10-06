@@ -1,0 +1,1483 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>C.A.S.S.I.E. 词汇检测工具</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background-color: #0a0c10;
+            background-image: radial-gradient(circle at 25% 40%, rgba(30, 35, 45, 0.4) 0%, #0a0c10 90%);
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 24px;
+        }
+
+        .container {
+            width: 900px;
+            max-width: 100%;
+            background-color: #0f1219;
+            border: 1px solid #2a2e35;
+            border-radius: 16px;
+            padding: 32px 36px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 28px;
+        }
+
+        .header h1 {
+            color: #eef2f5;
+            font-size: 26px;
+            font-weight: 500;
+            letter-spacing: 0.5px;
+            margin-bottom: 4px;
+            animation: fadeInDown 0.4s ease;
+        }
+
+        .header .subtitle {
+            color: #6a7a8e;
+            font-size: 13px;
+            font-family: 'Fira Code', monospace;
+            letter-spacing: 2px;
+            animation: fadeInDown 0.5s ease;
+        }
+
+        @keyframes fadeInDown {
+            from {
+                opacity: 0;
+                transform: translateY(-12px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .input-area {
+            margin-bottom: 20px;
+            animation: fadeInUp 0.5s ease 0.1s both;
+        }
+
+        .input-area label {
+            color: #8e9aaf;
+            font-size: 13px;
+            font-weight: 400;
+            display: block;
+            margin-bottom: 8px;
+        }
+
+        .input-area textarea {
+            width: 100%;
+            height: 140px;
+            background-color: #0a0c10;
+            border: 1px solid #2a2e35;
+            border-radius: 10px;
+            padding: 14px 16px;
+            color: #e2e8f2;
+            font-family: 'Fira Code', 'Courier New', monospace;
+            font-size: 14px;
+            resize: vertical;
+            transition: border-color 0.2s ease, box-shadow 0.2s ease;
+        }
+
+        .input-area textarea:focus {
+            outline: none;
+            border-color: #4a6080;
+            box-shadow: 0 0 0 3px rgba(74, 96, 128, 0.15);
+        }
+
+        .input-area textarea::placeholder {
+            color: #4a5260;
+        }
+
+        .button-group {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 24px;
+            animation: fadeInUp 0.5s ease 0.2s both;
+        }
+
+        .btn {
+            flex: 1;
+            padding: 12px 0;
+            border: none;
+            border-radius: 40px;
+            font-size: 15px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: transform 0.08s ease, background-color 0.15s ease;
+        }
+
+        .btn-primary {
+            background-color: #1a1e26;
+            border: 1px solid #303540;
+            color: #d8e2f2;
+        }
+
+        .btn-primary:hover {
+            background-color: #222733;
+        }
+
+        .btn-primary:active {
+            transform: scale(0.97);
+        }
+
+        .btn-secondary {
+            background-color: #0f1219;
+            border: 1px solid #2a2e35;
+            color: #8e9aaf;
+        }
+
+        .btn-secondary:hover {
+            background-color: #1a1e26;
+        }
+
+        .btn-secondary:active {
+            transform: scale(0.97);
+        }
+
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(12px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .output-area {
+            animation: fadeInUp 0.5s ease 0.3s both;
+        }
+
+        .output-area label {
+            color: #8e9aaf;
+            font-size: 13px;
+            font-weight: 400;
+            display: block;
+            margin-bottom: 8px;
+        }
+
+        .output-box {
+            background-color: #07090e;
+            border: 1px solid #232830;
+            border-radius: 10px;
+            padding: 14px 16px;
+            min-height: 200px;
+            max-height: 400px;
+            overflow-y: auto;
+            font-family: 'Fira Code', 'Courier New', monospace;
+            font-size: 13px;
+            color: #b7c9e2;
+            line-height: 1.6;
+            white-space: pre-wrap;
+            word-break: break-word;
+        }
+
+        .output-box .word-normal {
+            color: #98c379;
+        }
+
+        .output-box .word-error {
+            color: #ff7b72;
+            text-decoration: underline wavy #ff7b72;
+        }
+
+        .output-box .word-warning {
+            color: #79c0ff;
+        }
+
+        .output-box .word-split {
+            color: #d2a8ff;
+        }
+
+        .output-box .word-found {
+            color: #67c23a;
+        }
+
+        .output-box .line-separator {
+            color: #4a5260;
+            margin: 6px 0;
+        }
+
+        .status-bar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-top: 16px;
+            padding: 8px 12px;
+            background-color: #0a0c10;
+            border-radius: 8px;
+            border: 1px solid #1e222a;
+            font-size: 12px;
+            color: #5c6e8c;
+            font-family: 'Fira Code', monospace;
+            animation: fadeInUp 0.5s ease 0.4s both;
+        }
+
+        .status-bar .count {
+            color: #8e9aaf;
+        }
+
+        .status-bar .count span {
+            color: #79c0ff;
+        }
+
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: #0f1219;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: #2a2e35;
+            border-radius: 4px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: #3a4050;
+        }
+
+        .tag {
+            display: inline-block;
+            background-color: #1e222a;
+            border-radius: 4px;
+            padding: 2px 8px;
+            font-size: 11px;
+            color: #5c6e8c;
+            font-family: 'Fira Code', monospace;
+        }
+
+        .loading {
+            color: #5c6e8c;
+            font-size: 13px;
+            font-family: 'Fira Code', monospace;
+        }
+
+        @media (max-width: 600px) {
+            .container {
+                padding: 20px 16px;
+            }
+            .header h1 {
+                font-size: 20px;
+            }
+            .button-group {
+                flex-direction: column;
+            }
+            .input-area textarea {
+                height: 100px;
+            }
+            .output-box {
+                min-height: 150px;
+                max-height: 300px;
+                font-size: 12px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>C.A.S.S.I.E. 词汇检测工具</h1>
+            <div class="subtitle">检测广播内容中每个单词的可播放性</div>
+        </div>
+
+        <div class="input-area">
+            <label for="inputText">输入广播内容</label>
+            <textarea id="inputText" placeholder="输入广播内容，全小写，标点符号左右加空格..."></textarea>
+        </div>
+
+        <div class="button-group">
+            <button id="checkBtn" class="btn btn-primary">检测</button>
+            <button id="clearBtn" class="btn btn-secondary">清空</button>
+            <button id="specialBtn" class="btn btn-secondary">特殊文件列表</button>
+        </div>
+
+        <div class="output-area">
+            <label>检测结果</label>
+            <div id="outputBox" class="output-box">
+                <span style="color: #5c6e8c;">等待检测...</span>
+            </div>
+        </div>
+        <div class="output-area" style="margin-top: 20px;">
+            <label>特殊音频文件</label>
+            <div id="specialOutput" class="output-box" style="min-height: 80px; max-height: 200px;">
+                <span style="color: #5c6e8c;">点击检测后显示...</span>
+            </div>
+        </div>
+
+        <div class="status-bar">
+            <span class="count">词汇总数: <span id="wordCount">0</span></span>
+            <span class="count">已加载: <span id="loadedCount">0</span></span>
+            <span id="statusText" style="color: #5c6e8c;">就绪</span>
+        </div>
+    </div>
+
+    <script>
+        let wordList = [];
+let wordSet = new Set();
+
+function loadWordList() {
+    const data = [
+  "-ish",
+  "-like",
+  "0",
+  "1",
+  "10",
+  "11",
+  "12",
+  "13",
+  "14",
+  "15",
+  "16",
+  "17",
+  "18",
+  "19",
+  "2",
+  "20",
+  "3",
+  "30",
+  "4",
+  "40",
+  "5",
+  "50",
+  "6",
+  "60",
+  "7",
+  "70",
+  "8",
+  "80",
+  "9",
+  "90",
+  "_a",
+  "_b",
+  "_c",
+  "_d",
+  "_e",
+  "_f",
+  "_g",
+  "_h",
+  "_i",
+  "_j",
+  "_k",
+  "_l",
+  "_m",
+  "_n",
+  "_o",
+  "_p",
+  "_q",
+  "_r",
+  "_s",
+  "_t",
+  "_u",
+  "_v",
+  "_w",
+  "_x",
+  "_y",
+  "_z",
+  "a",
+  "able",
+  "about",
+  "above",
+  "absolute",
+  "accepted",
+  "access",
+  "acid",
+  "across",
+  "activate",
+  "activated",
+  "activating",
+  "activation",
+  "activity",
+  "address",
+  "administer",
+  "administered",
+  "adrenaline",
+  "advanced",
+  "advise",
+  "again",
+  "against",
+  "agent",
+  "aid",
+  "airlock",
+  "alarm",
+  "alert",
+  "alive",
+  "all",
+  "all generators engaged",
+  "all remaining personnel",
+  "all scps secured",
+  "alpha",
+  "already",
+  "also",
+  "always",
+  "am",
+  "amount",
+  "amplitude",
+  "an",
+  "analog",
+  "analysis",
+  "and",
+  "anomaly",
+  "anouncement",
+  "answer",
+  "anti-",
+  "any",
+  "approach",
+  "april",
+  "aquired",
+  "are",
+  "area",
+  "armory",
+  "around",
+  "arrest",
+  "arrival",
+  "as",
+  "at",
+  "attack",
+  "attempt",
+  "attention",
+  "august",
+  "authorized",
+  "automatic",
+  "autonomic",
+  "autonomous",
+  "available",
+  "avoid",
+  "awating recontainment",
+  "away",
+  "b",
+  "back",
+  "backup",
+  "bad",
+  "ban",
+  "bank",
+  "base",
+  "basic",
+  "battery",
+  "be",
+  "because",
+  "been",
+  "begun",
+  "behavior",
+  "behind",
+  "being",
+  "believe",
+  "below",
+  "beside",
+  "best",
+  "beta",
+  "between",
+  "big",
+  "billiard",
+  "biological",
+  "black",
+  "blast",
+  "blinded",
+  "blue",
+  "board",
+  "body",
+  "both",
+  "bottom",
+  "breach",
+  "break",
+  "breaker",
+  "broad",
+  "broadcast",
+  "build",
+  "built",
+  "but",
+  "by",
+  "byte",
+  "bytes",
+  "c",
+  "cadet",
+  "calm",
+  "camera",
+  "can",
+  "cannot",
+  "cant",
+  "capture",
+  "card",
+  "cassie",
+  "cast",
+  "cause",
+  "caution",
+  "cease",
+  "celsius",
+  "center",
+  "centi",
+  "central",
+  "central autonomic service system for internal emergencies",
+  "chamber",
+  "chaos",
+  "chaosinsurgency",
+  "charge",
+  "chase",
+  "check",
+  "checkpoint",
+  "chi",
+  "class",
+  "classd",
+  "clearance",
+  "close",
+  "closed",
+  "code",
+  "come",
+  "command",
+  "command2",
+  "commander",
+  "commencing",
+  "community",
+  "complete",
+  "completed",
+  "complex",
+  "condition",
+  "confirm",
+  "console",
+  "contain",
+  "contained",
+  "contained successfully",
+  "containment",
+  "containment unit",
+  "contamination",
+  "continue",
+  "control",
+  "cooperate",
+  "core",
+  "correct",
+  "corrupted",
+  "corruption",
+  "could",
+  "course",
+  "credit",
+  "critical",
+  "d",
+  "damage",
+  "danger",
+  "dark",
+  "data",
+  "date",
+  "day",
+  "deactivate",
+  "deactivated",
+  "dead",
+  "deca",
+  "december",
+  "deci",
+  "decision",
+  "decontamination",
+  "decrease",
+  "defence",
+  "degrees",
+  "delta",
+  "denied",
+  "designated",
+  "destroy",
+  "destroyed",
+  "destruct",
+  "destructed",
+  "destruction",
+  "detected",
+  "detonate",
+  "detonated",
+  "detonating",
+  "detonation",
+  "device",
+  "diagnostic",
+  "did",
+  "die",
+  "diesel",
+  "different",
+  "digital",
+  "dimention",
+  "disable",
+  "disabled",
+  "disables",
+  "discharge",
+  "disease",
+  "disengaged",
+  "distance",
+  "divided",
+  "division",
+  "do",
+  "doctor",
+  "does",
+  "done",
+  "door",
+  "doors",
+  "dose",
+  "down",
+  "e",
+  "earth",
+  "east",
+  "ed",
+  "effect",
+  "either",
+  "electicalexplosion",
+  "electric",
+  "electromagnetism",
+  "elevator",
+  "elevator #125529",
+  "elevators",
+  "emergency",
+  "empty",
+  "enable",
+  "enabled",
+  "enables",
+  "end",
+  "engaged",
+  "engine",
+  "enough",
+  "enter",
+  "entire",
+  "entrance",
+  "epsilon",
+  "equal",
+  "equals",
+  "equip_radio",
+  "error",
+  "escape",
+  "escort",
+  "escort2",
+  "essential",
+  "estimated",
+  "eta",
+  "euclid",
+  "evacuate",
+  "evacuation",
+  "evasion",
+  "even",
+  "ever",
+  "every",
+  "evidence",
+  "except",
+  "exception",
+  "exclude",
+  "exclusion",
+  "execute",
+  "executed",
+  "executive",
+  "exit",
+  "expiration",
+  "explain",
+  "explosion",
+  "explosive",
+  "expunged",
+  "external",
+  "extinguishment",
+  "extremely",
+  "f",
+  "facility",
+  "fahrenheit",
+  "failed",
+  "failure",
+  "falldamage",
+  "false",
+  "far",
+  "february",
+  "feel",
+  "femur",
+  "few",
+  "field",
+  "find",
+  "fine",
+  "finished",
+  "fire",
+  "first",
+  "for",
+  "force",
+  "forward",
+  "found",
+  "foundation",
+  "frequency",
+  "friday",
+  "from",
+  "front",
+  "fuel",
+  "full",
+  "g",
+  "g1",
+  "g2",
+  "g3",
+  "g4",
+  "g5",
+  "g6",
+  "game",
+  "gamma",
+  "gas",
+  "gasoline",
+  "gate",
+  "gates",
+  "general",
+  "generator",
+  "generators",
+  "get",
+  "giga",
+  "give",
+  "global",
+  "go",
+  "goes",
+  "going",
+  "gone",
+  "good",
+  "got",
+  "gram",
+  "grams",
+  "granted",
+  "grave",
+  "great",
+  "greater",
+  "green",
+  "grenade",
+  "ground",
+  "group",
+  "guard",
+  "gun",
+  "h",
+  "hack",
+  "half",
+  "hallway",
+  "hand",
+  "hardware",
+  "has",
+  "has entered the facility",
+  "have",
+  "hazard",
+  "he",
+  "head",
+  "hear",
+  "heavy",
+  "hecto",
+  "helicopter",
+  "hello",
+  "help",
+  "her",
+  "here",
+  "high",
+  "his",
+  "hit",
+  "hour",
+  "how",
+  "human",
+  "hundred",
+  "i",
+  "identification",
+  "identify",
+  "if",
+  "immediate",
+  "immediately",
+  "important",
+  "in",
+  "include",
+  "inclusion",
+  "incorrect",
+  "increase",
+  "indentified",
+  "infection",
+  "information",
+  "ing",
+  "initializing",
+  "initiated",
+  "inside",
+  "installation",
+  "installed",
+  "installing",
+  "insurgency",
+  "insurgent",
+  "intercom",
+  "interest",
+  "internal",
+  "intersection",
+  "into",
+  "intruder",
+  "iota",
+  "is",
+  "it",
+  "j",
+  "january",
+  "job",
+  "join",
+  "july",
+  "jump",
+  "june",
+  "just",
+  "k",
+  "kappa",
+  "keep",
+  "kelvin",
+  "keter",
+  "key",
+  "kill",
+  "killer",
+  "kilo",
+  "king",
+  "kit",
+  "know",
+  "l",
+  "laboratory",
+  "lambda",
+  "last",
+  "leak",
+  "leave",
+  "left",
+  "less",
+  "lethal",
+  "letter",
+  "level",
+  "lieutenant",
+  "life",
+  "light",
+  "lights",
+  "like",
+  "liquefied",
+  "liquid",
+  "live",
+  "load",
+  "local",
+  "locate",
+  "location",
+  "lock",
+  "lockdown",
+  "look",
+  "lost",
+  "low",
+  "m",
+  "magnetic",
+  "main",
+  "major",
+  "make",
+  "malfunction",
+  "man",
+  "manager",
+  "manual",
+  "many",
+  "march",
+  "material",
+  "may",
+  "me",
+  "med",
+  "medical",
+  "medium",
+  "mega",
+  "memory",
+  "men",
+  "message",
+  "meter",
+  "meters",
+  "micro",
+  "mili",
+  "military",
+  "milliard",
+  "million",
+  "minor",
+  "minus",
+  "minute",
+  "minutes",
+  "mobile",
+  "mobile task force unit",
+  "mode",
+  "module",
+  "monday",
+  "month",
+  "more",
+  "morphine",
+  "most",
+  "move",
+  "mu",
+  "much",
+  "must",
+  "my",
+  "n",
+  "name",
+  "nano",
+  "near",
+  "nearby",
+  "nearest",
+  "necessary",
+  "neck",
+  "need",
+  "negative",
+  "neutralize",
+  "never",
+  "new",
+  "next",
+  "nice",
+  "nine-tailed fox",
+  "no",
+  "nominal",
+  "nor",
+  "normal",
+  "normalize",
+  "north",
+  "northwood",
+  "not",
+  "notice",
+  "november",
+  "now",
+  "nu",
+  "nuclear",
+  "number",
+  "o",
+  "o5",
+  "october",
+  "of",
+  "off",
+  "offline",
+  "often",
+  "old",
+  "omega",
+  "omicron",
+  "on",
+  "once",
+  "ongoing",
+  "online",
+  "only",
+  "open",
+  "operate",
+  "operation",
+  "operational",
+  "operative",
+  "optimal",
+  "optional",
+  "or",
+  "orange",
+  "order",
+  "organism",
+  "other",
+  "out",
+  "outof",
+  "outside",
+  "outtage",
+  "over",
+  "overall",
+  "overcharge",
+  "overheat",
+  "override",
+  "p",
+  "pain",
+  "panic",
+  "partners",
+  "password",
+  "patch",
+  "patreon",
+  "pause",
+  "paused",
+  "pay",
+  "people",
+  "percent",
+  "permanent",
+  "person",
+  "personnel",
+  "petroleum",
+  "phi",
+  "pi",
+  "pistol",
+  "plague",
+  "please",
+  "plus",
+  "pocket",
+  "positive",
+  "possible",
+  "post-",
+  "potential",
+  "power",
+  "pre-",
+  "previous",
+  "primary",
+  "priority",
+  "private",
+  "pro-",
+  "probability",
+  "procedure",
+  "proceed",
+  "process",
+  "progress",
+  "project",
+  "project2",
+  "projector_static",
+  "prosecution",
+  "protect",
+  "protection",
+  "protocol",
+  "psi",
+  "public",
+  "pulsing",
+  "purge",
+  "put",
+  "q",
+  "query",
+  "question",
+  "questioning",
+  "r",
+  "radiation",
+  "radio",
+  "rank",
+  "reactivating",
+  "reactivation",
+  "reactor",
+  "ready",
+  "real",
+  "really",
+  "recieve",
+  "recontained",
+  "recontainment",
+  "red",
+  "redacted",
+  "rejected",
+  "remaining",
+  "remind",
+  "repair",
+  "repairing",
+  "repeat",
+  "report",
+  "require",
+  "respawn",
+  "respect",
+  "restricted",
+  "result",
+  "resumed",
+  "resurrection",
+  "retreat",
+  "return",
+  "revoke",
+  "right",
+  "ro",
+  "room",
+  "rough",
+  "run",
+  "running",
+  "s",
+  "safe",
+  "saturday",
+  "saw",
+  "say",
+  "scan",
+  "scanning",
+  "science",
+  "scientist",
+  "scientists",
+  "scp",
+  "scp 0 remaining",
+  "scp multiple remaining",
+  "scp subject",
+  "scp subjects",
+  "seal",
+  "search",
+  "second",
+  "secondary",
+  "seconds",
+  "secret",
+  "sector",
+  "secure",
+  "security",
+  "see",
+  "self",
+  "send",
+  "senior",
+  "sentient",
+  "september",
+  "sequence",
+  "serious",
+  "seriously",
+  "serpents",
+  "service",
+  "she",
+  "shelter",
+  "shoot",
+  "shooting",
+  "shot",
+  "should",
+  "shut",
+  "shutting",
+  "side",
+  "sigma",
+  "sis",
+  "site",
+  "small",
+  "snap",
+  "so",
+  "software",
+  "solid",
+  "some",
+  "somebody",
+  "someone",
+  "something",
+  "sorry",
+  "source",
+  "south",
+  "space",
+  "spotted",
+  "squad",
+  "stabilize",
+  "stable",
+  "stand",
+  "standard",
+  "standby",
+  "start",
+  "started",
+  "starting",
+  "static",
+  "status",
+  "stay",
+  "step",
+  "stop",
+  "stopped",
+  "storage",
+  "straight",
+  "strictly",
+  "studio",
+  "substantial",
+  "subsystem",
+  "successfully",
+  "sunday",
+  "supply",
+  "support",
+  "supporter",
+  "surface",
+  "surge",
+  "surprise",
+  "surrender",
+  "survive",
+  "survivor",
+  "system",
+  "systems",
+  "t",
+  "t-ed",
+  "tactical",
+  "take",
+  "taken",
+  "tank",
+  "tape2",
+  "target",
+  "task",
+  "tau",
+  "team",
+  "tell",
+  "temperature",
+  "temporal",
+  "tera",
+  "terminal",
+  "terminate",
+  "terminated",
+  "termination",
+  "tesla",
+  "test",
+  "thank",
+  "thanks",
+  "that",
+  "the_consonant",
+  "the_vowel",
+  "their",
+  "them",
+  "then",
+  "there",
+  "thermal",
+  "theta",
+  "they",
+  "thing",
+  "think",
+  "third",
+  "this",
+  "though",
+  "thought",
+  "thousand",
+  "threat",
+  "through",
+  "thursday",
+  "time",
+  "times",
+  "tminus",
+  "to",
+  "today",
+  "tomorrow",
+  "too",
+  "top",
+  "touch",
+  "towards",
+  "trillion",
+  "true",
+  "tuesday",
+  "turn",
+  "turned",
+  "turns",
+  "twice",
+  "u",
+  "un-",
+  "unable",
+  "unauthorized",
+  "unavailable",
+  "under",
+  "unit",
+  "universal",
+  "unknown",
+  "unlock",
+  "unnecessary",
+  "unspecified",
+  "unstable",
+  "until",
+  "up",
+  "upsilon",
+  "us",
+  "usbdrive",
+  "use",
+  "user",
+  "using",
+  "v",
+  "vents",
+  "very",
+  "virus",
+  "w",
+  "wait",
+  "wall",
+  "want",
+  "warhead",
+  "warheadcrank",
+  "warn",
+  "warning",
+  "was",
+  "way",
+  "weapon",
+  "weapons",
+  "wednesday",
+  "week",
+  "welcome",
+  "welk_ree",
+  "well",
+  "went",
+  "were",
+  "west",
+  "what",
+  "when",
+  "where",
+  "which",
+  "white",
+  "who",
+  "why",
+  "wide",
+  "will",
+  "with",
+  "without",
+  "wood",
+  "word",
+  "work",
+  "world",
+  "worst",
+  "would",
+  "wrong",
+  "x",
+  "y",
+  "year",
+  "yellow",
+  "yes",
+  "yesterday",
+  "yet",
+  "you",
+  "your",
+  "z",
+  "zeta",
+  "zone"
+];
+    wordList = data;
+    wordSet = new Set(data);
+    document.getElementById('wordCount').textContent = data.length;
+    document.getElementById('loadedCount').textContent = data.length;
+    document.getElementById('statusText').textContent = '就绪';
+}
+
+const NATO_MAP = {
+    'alpha': 'a', 'bravo': 'b', 'charlie': 'c', 'delta': 'd',
+    'echo': 'e', 'foxtrot': 'f', 'golf': 'g', 'hotel': 'h',
+    'india': 'i', 'juliett': 'j', 'kilo': 'k', 'lima': 'l',
+    'mike': 'm', 'november': 'n', 'oscar': 'o', 'papa': 'p',
+    'quebec': 'q', 'romeo': 'r', 'sierra': 's', 'tango': 't',
+    'uniform': 'u', 'victor': 'v', 'whiskey': 'w', 'xray': 'x',
+    'yankee': 'y', 'zulu': 'z'
+};
+
+function checkWord(word) {
+    if (['.', ',', '、'].includes(word)) {
+        return { found: true, type: 'punctuation', display: word + ' (标点)' };
+    }
+    if (word === 'mtf') {
+        return { found: true, type: 'mtf', display: 'mtf → mobile task force' };
+    }
+    if (/^g[1-9]$/.test(word)) {
+        return { found: true, type: 'glitch', display: word + ' (故障音效)' };
+    }
+    if (word.includes('+')) {
+    const phrase = word.replace(/\+/g, ' ');
+    if (wordSet.has(phrase)) {
+        return { found: true, type: 'phrase', display: word + ' → ' + phrase };
+    }
+    return { found: false, type: 'phrase_missing', display: word + ' (短语未找到)' };
+}
+    if (wordSet.has(word)) {
+        return { found: true, type: 'exact', display: word };
+    }
+    if (word in NATO_MAP) {
+        const mapped = NATO_MAP[word];
+        if (wordSet.has(mapped)) {
+            return { found: true, type: 'nato', display: word + ' → ' + mapped };
+        }
+    }
+    if (/^[a-z]$/.test(word)) {
+        const prefixed = '_' + word;
+        if (wordSet.has(prefixed)) {
+            return { found: true, type: 'letter', display: word + ' → ' + prefixed };
+        }
+    }
+    if (word.endsWith('ted')) {
+        const stem = word.slice(0, -3);
+        if (wordSet.has(stem) && wordSet.has('t-ed')) {
+            return { found: true, type: 't_ed', display: word + ' → ' + stem + ' + t-ed' };
+        }
+        if (wordSet.has(stem) && wordSet.has('t') && wordSet.has('ed')) {
+            return { found: true, type: 't_ed_split', display: word + ' → ' + stem + ' + t + ed' };
+        }
+    }
+    if (word.endsWith('ed')) {
+        const stem = word.slice(0, -2);
+        if (wordSet.has(stem) && wordSet.has('-ed')) {
+            return { found: true, type: 'ed', display: word + ' → ' + stem + ' + -ed' };
+        }
+    }
+    if (word.endsWith('ish')) {
+        const stem = word.slice(0, -3);
+        if (wordSet.has(stem) && wordSet.has('-ish')) {
+            return { found: true, type: 'ish', display: word + ' → ' + stem + ' + -ish' };
+        }
+    }
+    if (word.endsWith('like')) {
+        const stem = word.slice(0, -4);
+        if (wordSet.has(stem) && wordSet.has('-like')) {
+            return { found: true, type: 'like', display: word + ' → ' + stem + ' + -like' };
+        }
+    }
+    const prefixes = ['anti', 'post', 'pre', 'pro', 'un'];
+    for (const pref of prefixes) {
+        if (word.startsWith(pref) && word.length > pref.length) {
+            const stem = word.slice(pref.length);
+            const prefFile = pref + '-';
+            if (wordSet.has(prefFile) && wordSet.has(stem)) {
+                return { found: true, type: 'prefix', display: word + ' → ' + prefFile + ' + ' + stem };
+            }
+        }
+    }
+    return { found: false, type: 'missing', display: word };
+}
+
+function checkText(text) {
+    const segments = text.trim().split(/\s+/);
+    const results = [];
+    let foundCount = 0;
+    let missingCount = 0;
+    for (const seg of segments) {
+        if (!seg) continue;
+        const result = checkWord(seg);
+        results.push(result);
+        if (result.found) {
+            foundCount++;
+        } else {
+            missingCount++;
+        }
+    }
+    return { results, foundCount, missingCount, total: results.length };
+}
+
+function renderResults(results, foundCount, missingCount, total) {
+    const output = document.getElementById('outputBox');
+    if (total === 0) {
+        output.innerHTML = '<span style="color: #5c6e8c;">请输入内容</span>';
+        return;
+    }
+    let html = '';
+    for (const r of results) {
+        let colorClass = '';
+        if (r.found) {
+            if (r.type === 'exact') {
+                colorClass = 'word-found';
+            } else if (r.type === 'nato' || r.type === 'letter' || r.type === 'plus') {
+                colorClass = 'word-split';
+            } else if (r.type === 't_ed' || r.type === 't_ed_split' || r.type === 'ed' || r.type === 'ish' || r.type === 'like' || r.type === 'prefix') {
+                colorClass = 'word-split';
+            } else if (r.type === 'punctuation' || r.type === 'mtf' || r.type === 'glitch') {
+                colorClass = 'word-warning';
+            } else {
+                colorClass = 'word-found';
+            }
+        } else {
+            colorClass = 'word-error';
+        }
+        const displayText = r.display || r.text || '未知';
+        html += `<span class="${colorClass}">${displayText}</span> `;
+    }
+    const summary = `<div style="margin-top: 12px; padding-top: 12px; border-top: 1px solid #1e222a; font-size: 12px; color: #5c6e8c;">
+        总计 <span style="color: #8e9aaf;">${total}</span> 个段，
+        找到 <span style="color: #67c23a;">${foundCount}</span> 个，
+        缺失 <span style="color: #ff7b72;">${missingCount}</span> 个
+    </div>`;
+    output.innerHTML = html + summary;
+}
+
+function renderSpecialFiles() {
+    const specialFiles = [];
+    for (const word of wordList) {
+        if (word.includes('-') || word.includes('_') || word.includes(' ')) {
+            specialFiles.push(word);
+        }
+    }
+    specialFiles.sort();
+    const output = document.getElementById('specialOutput');
+    if (specialFiles.length === 0) {
+        output.innerHTML = '<span style="color: #5c6e8c;">没有找到特殊音频文件</span>';
+        return;
+    }
+    let html = '';
+    for (const f of specialFiles) {
+        html += `<span style="display: inline-block; background-color: #1e222a; border-radius: 4px; padding: 2px 10px; margin: 4px 6px 4px 0; color: #79c0ff; font-family: monospace; font-size: 12px;">${f}</span>`;
+    }
+    output.innerHTML = html;
+}
+
+document.getElementById('specialBtn').addEventListener('click', function() {
+    renderSpecialFiles();
+});
+
+document.getElementById('checkBtn').addEventListener('click', function() {
+    const text = document.getElementById('inputText').value;
+    if (!text.trim()) {
+        document.getElementById('outputBox').innerHTML = '<span style="color: #ff7b72;">请输入广播内容</span>';
+        return;
+    }
+    const { results, foundCount, missingCount, total } = checkText(text);
+    renderResults(results, foundCount, missingCount, total);
+    document.getElementById('statusText').textContent = '检测完成';
+});
+
+document.getElementById('clearBtn').addEventListener('click', function() {
+    document.getElementById('inputText').value = '';
+    document.getElementById('outputBox').innerHTML = '<span style="color: #5c6e8c;">等待检测...</span>';
+    document.getElementById('statusText').textContent = '已清空';
+});
+
+loadWordList();
+    </script>
+</body>
+</html>

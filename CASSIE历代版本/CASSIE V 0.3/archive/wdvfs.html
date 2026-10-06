@@ -1,0 +1,1209 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>C.A.S.S.I.E. 广播生成器</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <style>
+.slider-group {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    color: #cbd5e6;
+    font-size: 13px;
+    margin: 4px 0;
+}
+
+.slider-label {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 80px;
+}
+
+.slider-label span {
+    color: #eef2f5;
+    font-size: 13px;
+    font-weight: 400;
+}
+
+.slider-value {
+    min-width: 44px;
+    text-align: right;
+    font-family: 'Fira Code', monospace;
+    font-size: 13px;
+    font-weight: 500;
+    color: #79c0ff;
+}
+
+input[type="range"] {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 120px;
+    height: 4px;
+    border-radius: 2px;
+    background: #3a4050;
+    outline: none;
+    cursor: pointer;
+}
+
+input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: #6c7ea0;
+    cursor: pointer;
+    border: 2px solid #8e9aaf;
+}
+
+input[type="range"]::-webkit-slider-thumb:hover {
+    background: #7c8aa0;
+    transform: scale(1.1);
+}
+
+input[type="range"]::-webkit-slider-thumb:active {
+    transform: scale(0.92);
+}
+
+
+.checkbox-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    color: #cbd5e6;
+    font-size: 13px;
+    font-weight: 400;
+    cursor: pointer;
+    user-select: none;
+    position: relative;
+}
+
+.checkbox-label input {
+    position: absolute;
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+
+.checkbox-custom {
+    width: 18px;
+    height: 18px;
+    background-color: #0f1219;
+    border: 2px solid #4a5260;
+    border-radius: 4px;
+    display: inline-block;
+    position: relative;
+    transition: border-color 0.15s ease, background-color 0.15s ease, transform 0.1s ease;
+}
+
+.checkbox-label input:checked + .checkbox-custom {
+    background-color: #1a3a5c;
+    border-color: #4a8fc0;
+}
+
+.checkbox-label input:checked + .checkbox-custom::after {
+    content: "";
+    position: absolute;
+    left: 5px;
+    top: 2px;
+    width: 5px;
+    height: 9px;
+    border: solid #79c0ff;
+    border-width: 0 2px 2px 0;
+    transform: rotate(45deg);
+    animation: checkPop 0.15s cubic-bezier(0.34, 1.2, 0.64, 1) forwards;
+}
+
+.checkbox-label input:active + .checkbox-custom {
+    transform: scale(0.92);
+    transition: transform 0.05s linear;
+}
+
+@keyframes checkPop {
+    0% {
+        opacity: 0;
+        transform: rotate(45deg) scale(0.5);
+    }
+    80% {
+        transform: rotate(45deg) scale(1.1);
+    }
+    100% {
+        opacity: 1;
+        transform: rotate(45deg) scale(1);
+    }
+}
+
+.warning-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.80);
+    backdrop-filter: blur(4px);
+    z-index: 9999;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    animation: overlayFade 0.5s ease;
+    overflow: hidden;
+}
+
+@keyframes overlayFade {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+.warning-overlay::before {
+    content: '';
+    position: absolute;
+    top: -100%;
+    left: -100%;
+    width: 300%;
+    height: 300%;
+    background: repeating-linear-gradient(
+        45deg,
+        transparent,
+        transparent 40px,
+        rgba(255, 68, 68, 0.06) 40px,
+        rgba(255, 68, 68, 0.06) 41px
+    );
+    animation: slashMove 14s linear infinite;
+    pointer-events: none;
+    z-index: 0;
+}
+
+@keyframes slashMove {
+    0% { transform: translate(0, 0); }
+    100% { transform: translate(-80px, -80px); }
+}
+
+.warning-overlay::after {
+    content: '⚠';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    font-size: 800px;
+    font-weight: 600;
+    color: rgba(255, 68, 68, 0.50);
+    pointer-events: none;
+    z-index: 1;
+    animation: iconPulse 4s ease-in-out infinite;
+    font-family: 'Segoe UI', system-ui, sans-serif;
+}
+
+@keyframes iconPulse {
+    0%, 100% { opacity: 0.08; transform: translate(-50%, -50%) scale(1); }
+    50% { opacity: 0.18; transform: translate(-50%, -50%) scale(1.06); }
+}
+
+.warning-modal {
+    background-color: rgba(0, 0, 0, 0.3);
+    border: 2px solid #ff4444;
+    border-radius: 16px;
+    padding: 40px 48px;
+    max-width: 520px;
+    width: 90%;
+    box-shadow: 0 0 50px rgba(255, 68, 68, 0.12), 0 0 100px rgba(255, 68, 68, 0.04);
+    animation: modalEnter 0.6s cubic-bezier(0.34, 1.2, 0.64, 1), pulseGlow 2.5s ease-in-out infinite alternate, shake 4s ease-in-out infinite;
+    position: relative;
+    z-index: 10;
+}
+
+@keyframes modalEnter {
+    0% { opacity: 0; transform: scale(0.80) translateY(30px); }
+    100% { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+@keyframes pulseGlow {
+    0% { box-shadow: 0 0 30px rgba(255, 68, 68, 0.08), inset 0 0 30px rgba(255, 68, 68, 0.02); }
+    100% { box-shadow: 0 0 70px rgba(255, 68, 68, 0.22), 0 0 120px rgba(255, 68, 68, 0.06), inset 0 0 50px rgba(255, 68, 68, 0.04); }
+}
+
+@keyframes shake {
+    0%, 100% { transform: translateX(0) rotate(0deg); }
+    1% { transform: translateX(-6px) rotate(-0.8deg); }
+    3% { transform: translateX(6px) rotate(0.8deg); }
+    5% { transform: translateX(-4px) rotate(-0.5deg); }
+    7% { transform: translateX(4px) rotate(0.5deg); }
+    9% { transform: translateX(-2px) rotate(-0.3deg); }
+    11% { transform: translateX(2px) rotate(0.3deg); }
+    13% { transform: translateX(0) rotate(0deg); }
+}
+
+.warning-content {
+    text-align: center;
+    position: relative;
+    z-index: 2;
+}
+
+.warning-content p {
+    color: #eef2f5;
+    font-size: 18px;
+    line-height: 1.7;
+    margin-bottom: 28px;
+    font-weight: 400;
+    letter-spacing: 0.5px;
+    text-shadow: 0 0 20px rgba(255, 68, 68, 0.08);
+}
+
+.warning-content p::before {
+    content: '⚠ ';
+    color: #ff4444;
+    font-size: 22px;
+    font-weight: 700;
+}
+
+.warning-btn {
+    background: transparent;
+    border: 1px solid #ff4444;
+    border-radius: 40px;
+    padding: 10px 36px;
+    color: #eef2f5;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    position: relative;
+    overflow: hidden;
+}
+
+.warning-btn::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255, 68, 68, 0.15), transparent);
+    transition: left 0.6s ease;
+}
+
+.warning-btn:hover::before {
+    left: 100%;
+}
+
+.warning-btn:hover {
+    background: rgba(255, 68, 68, 0.08);
+    border-color: #ff6666;
+    box-shadow: 0 0 30px rgba(255, 68, 68, 0.08);
+}
+
+.warning-btn:active {
+    transform: scale(0.95);
+}
+.warning-modal {
+    animation: modalEnter 0.7s cubic-bezier(0.34, 1.2, 0.64, 1), pulseGlow 2.5s ease-in-out infinite alternate;
+}
+</style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>C.A.S.S.I.E. 广播生成器</h1>
+            <div class="subtitle">Central Autonomic Service System for Internal Emergencies</div>
+        </div>
+        <div class="options-panel">
+    <!-- 勾选框保持不变 -->
+    <label class="checkbox-label">
+        <input type="checkbox" id="enableBell">
+        <span class="checkbox-custom"></span>
+        <span>广播铃声</span>
+    </label>
+    <label class="checkbox-label">
+        <input type="checkbox" id="enableSpecialBell" disabled>
+        <span class="checkbox-custom"></span>
+        <span>特殊铃声</span>
+    </label>
+    <label class="checkbox-label">
+        <input type="checkbox" id="enableNumberReading">
+        <span class="checkbox-custom"></span>
+        <span>数字朗读</span>
+    </label>
+    <label class="checkbox-label">
+        <input type="checkbox" id="verboseMode">
+        <span class="checkbox-custom"></span>
+        <span>详细输出</span>
+    </label>
+
+    <!-- 音高控制 -->
+    <div class="slider-group">
+        <label class="slider-label">
+            <span>音高</span>
+            <span class="slider-value" id="pitchValue">1.00</span>
+        </label>
+        <input type="range" id="pitchSlider" min="0.1" max="10.0" step="0.05" value="1.0">
+    </div>
+
+    <!-- 语速控制 -->
+    <div class="slider-group">
+        <label class="slider-label">
+            <span>语速</span>
+            <span class="slider-value" id="speedValue">-10</span>
+        </label>
+        <input type="range" id="speedSlider" min="-20" max="20" step="1" value="-10">
+    </div>
+</div>
+        <div class="terminal">
+            <div class="terminal-header">
+                <span>输出终端</span>
+                <button id="clearTerminal" class="clear-btn">清空</button>
+            </div>
+            <div id="terminalContent" class="terminal-content">
+                <div class="terminal-line normal">就绪。请输入广播内容。</div>
+            </div>
+        </div>
+        <div class="input-area">
+            <textarea id="broadcastInput" rows="4" placeholder="输入广播内容..."></textarea>
+<div class="button-group">
+    <button id="spellCheckBtn" class="spellcheck-button">拼写检查</button>
+    <button id="exportBtn" class="play-button">导出WAV</button>
+    <button id="playBtn" class="play-button">播放广播</button>
+</div>
+        </div>
+        <div class="status-bar">
+            <span class="status-text" id="statusText">等待播放</span>
+            <div class="volume-indicator" id="volumeIndicator">
+                <div class="volume-fill" id="volumeFill"></div>
+            </div>
+        </div>
+        <div class="bottom-bar">
+    <button id="advancedBtn" class="help-link">高级设置</button>
+    <button id="presetBtn" class="help-link">预设管理</button>
+    <a href="/help" target="_blank" class="help-link">使用说明</a>
+</div>
+<div id="advancedModal" class="modal-overlay">
+    <div class="modal">
+        <button id="closeAdvanced" class="modal-close">&times;</button>
+        <h3>高级设置</h3>
+        <div class="param-group">
+            <label style="color: white;">广播铃声前置间隔（秒）</label><br>
+            <input type="number" id="bellLeadTime" value="3.0" step="0.1" min="0">
+            <span class="hint" style="color: white;">铃声开始后等待多少秒播放正文</span><br><br>
+        </div>
+        <div class="param-group">
+            <label style="color: white;">广播铃声额外时长（秒）</label><br>
+            <input type="number" id="bellExtraDuration" value="3.0" step="0.1" min="0">
+            <span class="hint" style="color: white;">铃声总时长 = 广播总时长 + 此值</span>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 20px;">
+    <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 4px;">
+        <input type="checkbox" id="broadcastEffectToggle" style="width: 18px; height: 18px; cursor: pointer; accent-color: #4a8fc0; background-color: #0f1219; border: 2px solid #4a5260; border-radius: 4px; transition: all 0.15s ease;">
+        <label for="broadcastEffectToggle" style="color: #eef2f5; font-size: 14px; cursor: pointer;">启用广播空间效果</label>
+    </div>
+
+    <div id="effectControls" style="display: flex; flex-direction: column; gap: 14px; opacity: 1; transition: opacity 0.2s;">
+        <div style="display: flex; align-items: center; gap: 16px;">
+            <label style="color: #8e9aaf; font-size: 13px; min-width: 100px;">低切 (Hz)</label>
+            <input type="range" id="lowCutFreq" min="0" max="500" step="1" value="0" style="flex: 1; height: 4px; background: #3a4050; border-radius: 2px; outline: none; -webkit-appearance: none;">
+            <span id="lowCutFreqValue" style="color: #79c0ff; font-family: monospace; min-width: 50px;">0</span>
+        </div>
+        <div style="display: flex; align-items: center; gap: 16px;">
+            <label style="color: #8e9aaf; font-size: 13px; min-width: 100px;">高切 (Hz)</label>
+            <input type="range" id="highCutFreq" min="0" max="10000" step="100" value="0" style="flex: 1; height: 4px; background: #3a4050; border-radius: 2px; outline: none; -webkit-appearance: none;">
+            <span id="highCutFreqValue" style="color: #79c0ff; font-family: monospace; min-width: 50px;">0</span>
+        </div>
+        <div style="display: flex; align-items: center; gap: 16px;">
+            <label style="color: #8e9aaf; font-size: 13px; min-width: 100px;">中频增益 (dB)</label>
+            <input type="range" id="midBoostGain" min="-10" max="10" step="0.5" value="2.0" style="flex: 1; height: 4px; background: #3a4050; border-radius: 2px; outline: none; -webkit-appearance: none;">
+            <span id="midBoostGainValue" style="color: #79c0ff; font-family: monospace; min-width: 50px;">2.0</span>
+        </div>
+        <div style="display: flex; align-items: center; gap: 16px;">
+            <label style="color: #8e9aaf; font-size: 13px; min-width: 100px;">过载增益 (dB)</label>
+            <input type="range" id="overdriveGain" min="0" max="20" step="0.5" value="0.0" style="flex: 1; height: 4px; background: #3a4050; border-radius: 2px; outline: none; -webkit-appearance: none;">
+            <span id="overdriveGainValue" style="color: #79c0ff; font-family: monospace; min-width: 50px;">0.0</span>
+        </div>
+        <div style="display: flex; align-items: center; gap: 16px;">
+            <label style="color: #8e9aaf; font-size: 13px; min-width: 100px;">削波阈值</label>
+            <input type="range" id="clipThreshold" min="0" max="2" step="0.05" value="0.0" style="flex: 1; height: 4px; background: #3a4050; border-radius: 2px; outline: none; -webkit-appearance: none;">
+            <span id="clipThresholdValue" style="color: #79c0ff; font-family: monospace; min-width: 50px;">0.0</span>
+        </div>
+        <div style="display: flex; align-items: center; gap: 16px;">
+            <label style="color: #8e9aaf; font-size: 13px; min-width: 100px;">压缩阈值 (dB)</label>
+            <input type="range" id="compressorThreshold" min="-30" max="0" step="0.5" value="-12.0" style="flex: 1; height: 4px; background: #3a4050; border-radius: 2px; outline: none; -webkit-appearance: none;">
+            <span id="compressorThresholdValue" style="color: #79c0ff; font-family: monospace; min-width: 50px;">-12.0</span>
+        </div>
+        <div style="display: flex; align-items: center; gap: 16px;">
+            <label style="color: #8e9aaf; font-size: 13px; min-width: 100px;">压缩比</label>
+            <input type="range" id="compressorRatio" min="1" max="20" step="0.5" value="6.0" style="flex: 1; height: 4px; background: #3a4050; border-radius: 2px; outline: none; -webkit-appearance: none;">
+            <span id="compressorRatioValue" style="color: #79c0ff; font-family: monospace; min-width: 50px;">6.0</span>
+        </div>
+        <div style="display: flex; align-items: center; gap: 16px;">
+            <label style="color: #8e9aaf; font-size: 13px; min-width: 100px;">预延迟 (ms)</label>
+            <input type="range" id="reverbDelay" min="0" max="300" step="1" value="100.0" style="flex: 1; height: 4px; background: #3a4050; border-radius: 2px; outline: none; -webkit-appearance: none;">
+            <span id="reverbDelayValue" style="color: #79c0ff; font-family: monospace; min-width: 50px;">100.0</span>
+        </div>
+        <div style="display: flex; align-items: center; gap: 16px;">
+            <label style="color: #8e9aaf; font-size: 13px; min-width: 100px;">衰减时间 (ms)</label>
+            <input type="range" id="reverbDecay" min="500" max="12000" step="100" value="3000.0" style="flex: 1; height: 4px; background: #3a4050; border-radius: 2px; outline: none; -webkit-appearance: none;">
+            <span id="reverbDecayValue" style="color: #79c0ff; font-family: monospace; min-width: 50px;">3000.0</span>
+        </div>
+        <div style="display: flex; align-items: center; gap: 16px;">
+            <label style="color: #8e9aaf; font-size: 13px; min-width: 100px;">混响湿声</label>
+            <input type="range" id="reverbWet" min="0" max="1" step="0.01" value="0.30" style="flex: 1; height: 4px; background: #3a4050; border-radius: 2px; outline: none; -webkit-appearance: none;">
+            <span id="reverbWetValue" style="color: #79c0ff; font-family: monospace; min-width: 50px;">0.30</span>
+        </div>
+        <div style="display: flex; align-items: center; gap: 16px;">
+            <label style="color: #8e9aaf; font-size: 13px; min-width: 100px;">混响低通 (Hz)</label>
+            <input type="range" id="reverbLowpass" min="500" max="6000" step="100" value="2000" style="flex: 1; height: 4px; background: #3a4050; border-radius: 2px; outline: none; -webkit-appearance: none;">
+            <span id="reverbLowpassValue" style="color: #79c0ff; font-family: monospace; min-width: 50px;">2000</span>
+        </div>
+        <div style="display: flex; align-items: center; gap: 16px;">
+            <label style="color: #8e9aaf; font-size: 13px; min-width: 100px;">高音延长</label>
+            <input type="range" id="trebleStretch" min="0" max="20" step="0.5" value="5.0" style="flex: 1; height: 4px; background: #3a4050; border-radius: 2px; outline: none; -webkit-appearance: none;">
+            <span id="trebleStretchValue" style="color: #79c0ff; font-family: monospace; min-width: 50px;">5.0</span>
+        </div>
+        <div style="display: flex; align-items: center; gap: 16px;">
+            <label style="color: #8e9aaf; font-size: 13px; min-width: 100px;">噪音音量 (dB)</label>
+            <input type="range" id="noiseVolume" min="-50" max="-10" step="0.5" value="-35.0" style="flex: 1; height: 4px; background: #3a4050; border-radius: 2px; outline: none; -webkit-appearance: none;">
+            <span id="noiseVolumeValue" style="color: #79c0ff; font-family: monospace; min-width: 50px;">-35.0</span>
+        </div>
+    </div>
+</div>
+        <div style="display: flex; justify-content: flex-end; gap: 12px; margin-top: 18px; padding-top: 14px; border-top: 1px solid #2a2e35;">
+    <button id="saveAdvanced" style="background-color: #2f3b5c; border: 1px solid #4a6080; border-radius: 40px; padding: 8px 28px; color: #eef2f5; font-size: 14px; font-weight: 500; cursor: pointer; transition: background-color 0.08s ease, transform 0.05s linear; font-family: 'Segoe UI', system-ui, sans-serif;">保存</button>
+</div>
+    </div>
+</div>
+    </div>
+    <div id="presetModal" class="modal-overlay">
+        <div class="modal">
+            <button id="closeModal" class="modal-close">&times;</button>
+            <h3>预设管理</h3>
+            <div id="presetList" class="preset-list"></div>
+            <input type="text" id="presetName" placeholder="预设名称">
+            <textarea id="presetContent" rows="2" placeholder="广播内容"></textarea>
+            <div class="modal-buttons">
+                <button id="savePreset">保存预设</button>
+                <button id="importPreset">从文件导入</button>
+                <button id="playSelectedBtn">播放选中</button>
+            </div>
+            
+        </div>
+    </div>
+    <script>
+        var enableBell = false;
+        var enableSpecialBell = false;
+        var enableNumberReading = false;
+        var verboseMode = false;
+        var presets = {};
+        var selectedPresets = [];
+
+        var enableBellCheckbox = document.getElementById('enableBell');
+        var enableSpecialBellCheckbox = document.getElementById('enableSpecialBell');
+        var enableNumberReadingCheckbox = document.getElementById('enableNumberReading');
+        var verboseModeCheckbox = document.getElementById('verboseMode');
+        var broadcastInput = document.getElementById('broadcastInput');
+        var playBtn = document.getElementById('playBtn');
+        var spellCheckBtn = document.getElementById('spellCheckBtn');
+        var clearTerminalBtn = document.getElementById('clearTerminal');
+        var terminalContent = document.getElementById('terminalContent');
+        var statusText = document.getElementById('statusText');
+        var volumeFill = document.getElementById('volumeFill');
+        var presetBtn = document.getElementById('presetBtn');
+        var presetModal = document.getElementById('presetModal');
+        var closeModal = document.getElementById('closeModal');
+        var presetList = document.getElementById('presetList');
+        var presetName = document.getElementById('presetName');
+        var presetContent = document.getElementById('presetContent');
+        var savePreset = document.getElementById('savePreset');
+        var importPreset = document.getElementById('importPreset');
+        var playSelectedBtn = document.getElementById('playSelectedBtn');
+        var checkbox = document.createElement('input');
+        checkbox.type = 'checkbox';
+        checkbox.className = 'preset-checkbox';
+
+
+
+var advancedBtn = document.getElementById('advancedBtn');
+var advancedModal = document.getElementById('advancedModal');
+var closeAdvanced = document.getElementById('closeAdvanced');
+var saveAdvanced = document.getElementById('saveAdvanced');
+
+var bellLeadTimeInput = document.getElementById('bellLeadTime');
+var bellExtraDurationInput = document.getElementById('bellExtraDuration');
+
+var effectToggle = document.getElementById('broadcastEffectToggle');
+var lowCutFreq = document.getElementById('lowCutFreq');
+var lowCutFreqValue = document.getElementById('lowCutFreqValue');
+var highCutFreq = document.getElementById('highCutFreq');
+var highCutFreqValue = document.getElementById('highCutFreqValue');
+var midBoostGain = document.getElementById('midBoostGain');
+var midBoostGainValue = document.getElementById('midBoostGainValue');
+var overdriveGain = document.getElementById('overdriveGain');
+var overdriveGainValue = document.getElementById('overdriveGainValue');
+var clipThreshold = document.getElementById('clipThreshold');
+var clipThresholdValue = document.getElementById('clipThresholdValue');
+var compressorThreshold = document.getElementById('compressorThreshold');
+var compressorThresholdValue = document.getElementById('compressorThresholdValue');
+var compressorRatio = document.getElementById('compressorRatio');
+var compressorRatioValue = document.getElementById('compressorRatioValue');
+var reverbDelay = document.getElementById('reverbDelay');
+var reverbDelayValue = document.getElementById('reverbDelayValue');
+var reverbDecay = document.getElementById('reverbDecay');
+var reverbDecayValue = document.getElementById('reverbDecayValue');
+var reverbWet = document.getElementById('reverbWet');
+var reverbWetValue = document.getElementById('reverbWetValue');
+var reverbLowpass = document.getElementById('reverbLowpass');
+var reverbLowpassValue = document.getElementById('reverbLowpassValue');
+var trebleStretch = document.getElementById('trebleStretch');
+var trebleStretchValue = document.getElementById('trebleStretchValue');
+var noiseVolume = document.getElementById('noiseVolume');
+var noiseVolumeValue = document.getElementById('noiseVolumeValue');
+var effectControls = document.getElementById('effectControls');
+
+function syncSliders() {
+    lowCutFreqValue.textContent = lowCutFreq.value;
+    highCutFreqValue.textContent = highCutFreq.value;
+    midBoostGainValue.textContent = midBoostGain.value;
+    overdriveGainValue.textContent = overdriveGain.value;
+    clipThresholdValue.textContent = clipThreshold.value;
+    compressorThresholdValue.textContent = compressorThreshold.value;
+    compressorRatioValue.textContent = compressorRatio.value;
+    reverbDelayValue.textContent = reverbDelay.value;
+    reverbDecayValue.textContent = reverbDecay.value;
+    reverbWetValue.textContent = reverbWet.value;
+    reverbLowpassValue.textContent = reverbLowpass.value;
+    trebleStretchValue.textContent = trebleStretch.value;
+    noiseVolumeValue.textContent = noiseVolume.value;
+}
+
+lowCutFreq.addEventListener('input', syncSliders);
+highCutFreq.addEventListener('input', syncSliders);
+midBoostGain.addEventListener('input', syncSliders);
+overdriveGain.addEventListener('input', syncSliders);
+clipThreshold.addEventListener('input', syncSliders);
+compressorThreshold.addEventListener('input', syncSliders);
+compressorRatio.addEventListener('input', syncSliders);
+reverbDelay.addEventListener('input', syncSliders);
+reverbDecay.addEventListener('input', syncSliders);
+reverbWet.addEventListener('input', syncSliders);
+reverbLowpass.addEventListener('input', syncSliders);
+trebleStretch.addEventListener('input', syncSliders);
+noiseVolume.addEventListener('input', syncSliders);
+
+function updateEffectControls() {
+    var enabled = effectToggle.checked;
+    var inputs = effectControls.querySelectorAll('input');
+    inputs.forEach(function(input) {
+        input.disabled = !enabled;
+    });
+    effectControls.style.opacity = enabled ? '1' : '0.4';
+    effectControls.style.pointerEvents = enabled ? 'auto' : 'none';
+}
+
+function showWarningModal(message) {
+    // 重复检查
+    // var key = 'warning_' + message;
+    // if (sessionStorage.getItem(key)) {
+    //     return;
+    // }
+    // sessionStorage.setItem(key, '1');
+
+    var overlay = document.createElement('div');
+    overlay.className = 'warning-overlay';
+    var modal = document.createElement('div');
+    modal.className = 'warning-modal';
+    var content = document.createElement('div');
+    content.className = 'warning-content';
+    var text = document.createElement('p');
+    text.textContent = message;
+    var button = document.createElement('button');
+    button.textContent = '知道了';
+    button.className = 'warning-btn';
+    button.addEventListener('click', function() {
+        document.body.removeChild(overlay);
+    });
+    content.appendChild(text);
+    content.appendChild(button);
+    modal.appendChild(content);
+    overlay.appendChild(modal);
+    document.body.appendChild(overlay);
+    overlay.addEventListener('click', function(e) {
+        if (e.target === overlay) {
+            document.body.removeChild(overlay);
+        }
+    });
+}
+
+effectToggle.addEventListener('change', function() {
+    updateEffectControls();
+    if (this.checked) {
+        showWarningModal('此功能是还未正式完成的试验性功能，效果可能无法达到要求');
+    }
+});
+
+
+
+advancedBtn.addEventListener('click', function() {
+    fetch('/get_advanced_settings')
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            bellLeadTimeInput.value = data.bell_lead_time || 3.0;
+            bellExtraDurationInput.value = data.bell_extra_duration || 3.0;
+            effectToggle.checked = data.broadcast_effect_enabled || false;
+            lowCutFreq.value = data.low_cut_freq || 0;
+            highCutFreq.value = data.high_cut_freq || 0;
+            midBoostGain.value = data.mid_boost_gain || 2.0;
+            overdriveGain.value = data.overdrive_gain || 0.0;
+            clipThreshold.value = data.clip_threshold || 0.0;
+            compressorThreshold.value = data.compressor_threshold || -12.0;
+            compressorRatio.value = data.compressor_ratio || 6.0;
+            reverbDelay.value = data.reverb_delay || 100.0;
+            reverbDecay.value = data.reverb_decay || 3000.0;
+            reverbWet.value = data.reverb_wet || 0.30;
+            reverbLowpass.value = data.reverb_lowpass || 2000;
+            trebleStretch.value = data.treble_stretch || 5.0;
+            noiseVolume.value = data.noise_volume || -35.0;
+            syncSliders();
+            updateEffectControls();
+            advancedModal.classList.add('show');
+        })
+        .catch(function() {
+            bellLeadTimeInput.value = 3.0;
+            bellExtraDurationInput.value = 3.0;
+            effectToggle.checked = false;
+            lowCutFreq.value = 0;
+            highCutFreq.value = 0;
+            midBoostGain.value = 2.0;
+            overdriveGain.value = 0.0;
+            clipThreshold.value = 0.0;
+            compressorThreshold.value = -12.0;
+            compressorRatio.value = 6.0;
+            reverbDelay.value = 100.0;
+            reverbDecay.value = 3000.0;
+            reverbWet.value = 0.30;
+            reverbLowpass.value = 2000;
+            trebleStretch.value = 5.0;
+            noiseVolume.value = -35.0;
+            syncSliders();
+            updateEffectControls();
+            advancedModal.classList.add('show');
+        });
+});
+
+closeAdvanced.addEventListener('click', function() {
+    advancedModal.classList.remove('show');
+});
+
+advancedModal.addEventListener('click', function(e) {
+    if (e.target === advancedModal) {
+        advancedModal.classList.remove('show');
+    }
+});
+
+saveAdvanced.addEventListener('click', function() {
+    var leadTime = parseFloat(bellLeadTimeInput.value) || 3.0;
+    var extraDuration = parseFloat(bellExtraDurationInput.value) || 3.0;
+    var enabled = effectToggle.checked;
+    var lowCut = parseFloat(lowCutFreq.value) || 0;
+    var highCut = parseFloat(highCutFreq.value) || 0;
+    var midBoost = parseFloat(midBoostGain.value) || 2.0;
+    var overdrive = parseFloat(overdriveGain.value) || 0.0;
+    var clip = parseFloat(clipThreshold.value) || 0.0;
+    var compThresh = parseFloat(compressorThreshold.value) || -12.0;
+    var compRatio = parseFloat(compressorRatio.value) || 6.0;
+    var revDelay = parseFloat(reverbDelay.value) || 100.0;
+    var revDecay = parseFloat(reverbDecay.value) || 3000.0;
+    var revWet = parseFloat(reverbWet.value) || 0.30;
+    var revLow = parseFloat(reverbLowpass.value) || 2000;
+    var treble = parseFloat(trebleStretch.value) || 5.0;
+    var noise = parseFloat(noiseVolume.value) || -35.0;
+
+    fetch('/save_advanced_settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            bell_lead_time: leadTime,
+            bell_extra_duration: extraDuration,
+            broadcast_effect_enabled: enabled,
+            low_cut_freq: lowCut,
+            high_cut_freq: highCut,
+            mid_boost_gain: midBoost,
+            overdrive_gain: overdrive,
+            clip_threshold: clip,
+            compressor_threshold: compThresh,
+            compressor_ratio: compRatio,
+            reverb_delay: revDelay,
+            reverb_decay: revDecay,
+            reverb_wet: revWet,
+            reverb_lowpass: revLow,
+            treble_stretch: treble,
+            noise_volume: noise,
+            noise_type: 'pink'
+        })
+    })
+    .then(function(res) { return res.json(); })
+    .then(function(data) {
+        if (data.success) {
+            addTerminalLine('高级设置已保存', 'normal');
+            advancedModal.classList.remove('show');
+        } else {
+            addTerminalLine('保存失败', 'error');
+        }
+    })
+    .catch(function(err) {
+        addTerminalLine('保存失败: ' + err, 'error');
+    });
+});
+
+
+
+
+
+
+
+
+
+
+
+        enableBellCheckbox.addEventListener('change', function() {
+            enableBell = this.checked;
+            enableSpecialBellCheckbox.disabled = !enableBell;
+            if (!enableBell) enableSpecialBellCheckbox.checked = false;
+        });
+        enableSpecialBellCheckbox.addEventListener('change', function() { enableSpecialBell = this.checked; });
+        enableNumberReadingCheckbox.addEventListener('change', function() { enableNumberReading = this.checked; });
+        verboseModeCheckbox.addEventListener('change', function() { verboseMode = this.checked; });
+
+        function addTerminalLine(text, type) {
+            var line = document.createElement('div');
+            line.className = 'terminal-line ' + type;
+            line.textContent = text;
+            terminalContent.appendChild(line);
+            line.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        }
+
+        function addTerminalLineWithHighlight(text, notFoundWords) {
+            var line = document.createElement('div');
+            line.className = 'terminal-line spellcheck';
+            var words = text.split(' ');
+            var html = '';
+            for (var i = 0; i < words.length; i++) {
+                var word = words[i];
+                if (notFoundWords.indexOf(word) !== -1) {
+                    html += '<span style="color: #ff7b72; text-decoration: underline wavy #ff7b72;">' + word + '</span> ';
+                } else {
+                    html += word + ' ';
+                }
+            }
+            line.innerHTML = html;
+            terminalContent.appendChild(line);
+            line.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        }
+
+        function clearTerminal() {
+            terminalContent.innerHTML = '';
+            addTerminalLine('就绪。请输入广播内容。', 'normal');
+        }
+        clearTerminalBtn.addEventListener('click', clearTerminal);
+
+        spellCheckBtn.addEventListener('click', function() {
+            var text = broadcastInput.value.trim();
+            if (!text) {
+                addTerminalLine('请输入广播内容', 'error');
+                return;
+            }
+            fetch('/check_spelling_display', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ text: text })
+            }).then(function(res) { return res.json(); }).then(function(data) {
+                addTerminalLineWithHighlight(data.text, data.not_found);
+            });
+        });
+
+        var currentEventSource = null;
+        function playBroadcast() {
+            var text = broadcastInput.value.trim();
+            if (!text) {
+                addTerminalLine('请输入广播内容', 'error');
+                return;
+            }
+            if (currentEventSource) {
+                currentEventSource.close();
+                currentEventSource = null;
+            }
+            statusText.textContent = '播放中';
+            if (verboseMode) {
+                terminalContent.innerHTML = '';
+            }
+            fetch('/play', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    text: text,
+                    enable_bell: enableBell,
+                    enable_special_bell: enableSpecialBell,
+                    enable_number_reading: enableNumberReading,
+                    verbose_mode: verboseMode
+                })
+            }).then(function(response) {
+                var reader = response.body.getReader();
+                var decoder = new TextDecoder();
+                function readStream() {
+                    reader.read().then(function(result) {
+                        if (result.done) {
+                            statusText.textContent = '等待播放';
+                            return;
+                        }
+                        var chunk = decoder.decode(result.value);
+                        var lines = chunk.split('\\n');
+                        for (var i = 0; i < lines.length; i++) {
+                            if (lines[i].startsWith('data: ')) {
+                                var data = JSON.parse(lines[i].substring(6));
+                                if (data.type === 'end') {
+                                    statusText.textContent = '等待播放';
+                                    return;
+                                }
+                                addTerminalLine(data.text, data.type);
+                            }
+                        }
+                        readStream();
+                    });
+                }
+                readStream();
+            }).catch(function(err) {
+                addTerminalLine('播放失败: ' + err, 'error');
+                statusText.textContent = '等待播放';
+            });
+        }
+        playBtn.addEventListener('click', playBroadcast);
+
+        function loadPresets() {
+            fetch('/get_presets').then(function(res) { return res.json(); }).then(function(data) {
+                presets = data;
+                renderPresetList();
+            });
+        }
+
+        function renderPresetList() {
+    presetList.innerHTML = '';
+    var names = Object.keys(presets);
+    if (names.length === 0) {
+        presetList.innerHTML = '<div style="color: #5c6e8c; text-align: center; padding: 20px;">暂无预设</div>';
+        return;
+    }
+    var table = document.createElement('table');
+    table.style.width = '100%';
+    table.style.borderCollapse = 'collapse';
+    table.style.fontFamily = 'monospace';
+    table.style.fontSize = '12px';
+    for (var i = 0; i < names.length; i++) {
+        var name = names[i];
+        var content = presets[name];
+        var tr = document.createElement('tr');
+        tr.style.borderBottom = '1px solid #232830';
+        // 勾选框单元格
+        var tdCheckbox = document.createElement('td');
+        tdCheckbox.style.width = '30px';
+        tdCheckbox.style.padding = '8px 0';
+        var checkbox = document.createElement('input');
+        checkbox.type = 'checkbox';
+        checkbox.className = 'preset-checkbox';
+        checkbox.setAttribute('data-name', name);
+        checkbox.addEventListener('change', function(e) {
+            var n = e.target.getAttribute('data-name');
+            if (e.target.checked) {
+                if (selectedPresets.indexOf(n) === -1) selectedPresets.push(n);
+            } else {
+                var idx = selectedPresets.indexOf(n);
+                if (idx !== -1) selectedPresets.splice(idx, 1);
+            }
+        });
+        tdCheckbox.appendChild(checkbox);
+        // 预设名称单元格
+        var tdName = document.createElement('td');
+        tdName.style.padding = '8px 12px';
+        tdName.style.color = '#eef2f5';
+        tdName.style.cursor = 'pointer';
+        tdName.style.whiteSpace = 'nowrap';
+        tdName.textContent = name;
+        tdName.addEventListener('click', (function(n) {
+            return function() {
+                broadcastInput.value = presets[n];
+                presetModal.classList.remove('show');
+            };
+        })(name));
+        // 预览内容单元格
+        var tdPreview = document.createElement('td');
+        tdPreview.style.padding = '8px 0';
+        tdPreview.style.color = '#5c6e8c';
+        tdPreview.style.width = '100%';
+        tdPreview.style.whiteSpace = 'nowrap';
+        tdPreview.style.overflowX = 'auto';
+        tdPreview.style.maxWidth = '300px';
+        var preview = content.length > 50 ? content.substring(0, 50) + '...' : content;
+        tdPreview.textContent = preview;
+        // 删除按钮单元格
+        var tdDelete = document.createElement('td');
+        tdDelete.style.width = '30px';
+        tdDelete.style.padding = '8px 0';
+        tdDelete.style.textAlign = 'center';
+        var deleteBtn = document.createElement('button');
+        deleteBtn.textContent = '×';
+        deleteBtn.style.background = 'none';
+        deleteBtn.style.border = 'none';
+        deleteBtn.style.color = '#ff7b72';
+        deleteBtn.style.cursor = 'pointer';
+        deleteBtn.style.fontSize = '16px';
+        deleteBtn.setAttribute('data-name', name);
+        deleteBtn.addEventListener('click', (function(n) {
+            return function(e) {
+                e.stopPropagation();
+                fetch('/delete_preset', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name: n })
+                }).then(function() { loadPresets(); });
+            };
+        })(name));
+        tdDelete.appendChild(deleteBtn);
+        tr.appendChild(tdCheckbox);
+        tr.appendChild(tdName);
+        tr.appendChild(tdPreview);
+        tr.appendChild(tdDelete);
+        table.appendChild(tr);
+    }
+    presetList.appendChild(table);
+}
+
+        presetBtn.addEventListener('click', function() {
+            selectedPresets = [];
+            loadPresets();
+            presetModal.classList.add('show');
+        });
+        closeModal.addEventListener('click', function() { presetModal.classList.remove('show'); });
+        presetModal.addEventListener('click', function(e) {
+            if (e.target === presetModal) presetModal.classList.remove('show');
+        });
+
+        savePreset.addEventListener('click', function() {
+            var name = presetName.value.trim();
+            var content = presetContent.value.trim();
+            if (!name || !content) return;
+            fetch('/save_preset', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name: name, content: content })
+            }).then(function() {
+                presetName.value = '';
+                presetContent.value = '';
+                loadPresets();
+            });
+        });
+
+        importPreset.addEventListener('click', function() {
+            var input = document.createElement('input');
+            input.type = 'file';
+            input.accept = '.json';
+            input.onchange = function(e) {
+                var file = e.target.files[0];
+                var reader = new FileReader();
+                reader.onload = function(ev) {
+                    fetch('/import_presets', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: ev.target.result
+                    }).then(function() { loadPresets(); });
+                };
+                reader.readAsText(file);
+            };
+            input.click();
+        });
+
+        playSelectedBtn.addEventListener('click', function() {
+            if (selectedPresets.length === 0) {
+                addTerminalLine('请至少选择一个预设', 'error');
+                return;
+            }
+            var combined = [];
+            for (var i = 0; i < selectedPresets.length; i++) {
+                combined.push(presets[selectedPresets[i]]);
+            }
+            var text = combined.join(' . ');
+            broadcastInput.value = text;
+            presetModal.classList.remove('show');
+            playBroadcast();
+        });
+
+        var exportBtn = document.getElementById('exportBtn');
+exportBtn.addEventListener('click', function() {
+    var text = broadcastInput.value.trim();
+    if (!text) {
+        addTerminalLine('请输入广播内容', 'error');
+        return;
+    }
+
+    // 先弹窗让用户选择设备
+    var deviceName = prompt(
+        '请输入要使用的录音设备名称：\n' +
+        'Windows 通常为 "Stereo Mix" 或 "立体声混音"\n' +
+        'macOS 通常为 "BlackHole 2ch"\n\n' +
+        '如果不知道设备名称，请留空使用默认设备（可能录制到麦克风）',
+        ''
+    );
+
+    statusText.textContent = '导出中';
+    fetch('/export', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            text: text,
+            device: deviceName || ''
+        })
+    })
+    .then(function(res) {
+        if (res.headers.get('Content-Type') === 'audio/wav') {
+            return res.blob();
+        } else {
+            return res.json().then(function(data) {
+                throw new Error(data.message || '导出失败');
+            });
+        }
+    })
+    .then(function(blob) {
+        var url = URL.createObjectURL(blob);
+        var a = document.createElement('a');
+        a.href = url;
+        a.download = 'broadcast.wav';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        addTerminalLine('导出成功: broadcast.wav', 'normal');
+        statusText.textContent = '等待播放';
+    })
+    .catch(function(err) {
+        addTerminalLine('导出失败: ' + err.message, 'error');
+        statusText.textContent = '等待播放';
+    });
+});
+// 获取滑块元素
+var pitchSlider = document.getElementById('pitchSlider');
+var speedSlider = document.getElementById('speedSlider');
+var pitchValue = document.getElementById('pitchValue');
+var speedValue = document.getElementById('speedValue');
+
+// 音高滑块事件
+pitchSlider.addEventListener('input', function() {
+    var val = parseFloat(this.value).toFixed(2);
+    pitchValue.textContent = val;
+});
+
+// 语速滑块事件
+speedSlider.addEventListener('input', function() {
+    var val = parseInt(this.value, 10);
+    speedValue.textContent = val;
+    var color = '#79c0ff';
+    if (val === -10) {
+        color = '#ffffff';
+    } else if (val < -10) {
+        color = '#ff7b72';
+    } else if (val < 0) {
+        color = '#ffa500';
+    } else if (val > 0) {
+        color = '#ff7b72';
+    } else {
+        color = '#79c0ff';
+    }
+    speedValue.style.color = color;
+});
+// 初始化语速颜色
+speedSlider.dispatchEvent(new Event('input'));
+
+// 修改 playBroadcast 函数中的 fetch 请求，增加 pitch 和 speed 参数
+function playBroadcast() {
+    var text = broadcastInput.value.trim();
+    if (!text) {
+        addTerminalLine('请输入广播内容', 'error');
+        return;
+    }
+    if (currentEventSource) {
+        currentEventSource.close();
+        currentEventSource = null;
+    }
+    statusText.textContent = '播放中';
+    if (verboseMode) {
+        terminalContent.innerHTML = '';
+    }
+    var pitch = parseFloat(pitchSlider.value);
+    var speed = parseInt(speedSlider.value, 10);
+    fetch('/play', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            text: text,
+            enable_bell: enableBell,
+            enable_special_bell: enableSpecialBell,
+            enable_number_reading: enableNumberReading,
+            verbose_mode: verboseMode,
+            pitch: pitch,
+            speed: speed
+        })
+    }).then(function(response) {
+        var reader = response.body.getReader();
+        var decoder = new TextDecoder();
+        function readStream() {
+            reader.read().then(function(result) {
+                if (result.done) {
+                    statusText.textContent = '等待播放';
+                    return;
+                }
+                var chunk = decoder.decode(result.value);
+                var lines = chunk.split('\\n');
+                for (var i = 0; i < lines.length; i++) {
+                    if (lines[i].startsWith('data: ')) {
+                        var data = JSON.parse(lines[i].substring(6));
+                        if (data.type === 'end') {
+                            statusText.textContent = '等待播放';
+                            return;
+                        }
+                        addTerminalLine(data.text, data.type);
+                    }
+                }
+                readStream();
+            });
+        }
+        readStream();
+    }).catch(function(err) {
+        addTerminalLine('播放失败: ' + err, 'error');
+        statusText.textContent = '等待播放';
+    });
+}
+
+        function updateVolume() {
+            if (navigator.getUserMedia) {
+                navigator.getUserMedia({ audio: true }, function(stream) {
+                    var audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                    var source = audioContext.createMediaStreamSource(stream);
+                    var analyser = audioContext.createAnalyser();
+                    analyser.fftSize = 256;
+                    source.connect(analyser);
+                    var dataArray = new Uint8Array(analyser.frequencyBinCount);
+                    function getVolume() {
+                        analyser.getByteFrequencyData(dataArray);
+                        var sum = 0;
+                        for (var i = 0; i < dataArray.length; i++) {
+                            sum += dataArray[i];
+                        }
+                        var avg = sum / dataArray.length;
+                        var percent = Math.min(100, (avg / 255) * 100);
+                        volumeFill.style.width = percent + '%';
+                        requestAnimationFrame(getVolume);
+                    }
+                    getVolume();
+                }, function(err) {
+                    console.log('麦克风权限未授予');
+                });
+            }
+        }
+        updateVolume();
+    </script>
+</body>
+</html>

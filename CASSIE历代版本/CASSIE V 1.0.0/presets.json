@@ -1,0 +1,6 @@
+{
+  "mtf": "mobile+task+force+unit , epsilon 11 , designated , alpha 2 , has+entered+the+facility . all+remaining+personnel . awating+recontainment . 3 scp+subjects",
+  "杂音": "[speed:0.2]g2 [speed:0.2]g1 [speed:0.2]g3 [speed:0.3]g4 [speed:0.2]g4 [speed:0.15]g4 [speed:0.1]g4",
+  "example": "[speed:0.2]g1 [speed:0.2]g3 [speed:0.3]g4 [speed:0.2]g4 [speed:0.15]g4 [speed:0.1]g4\n[speed:0.95]attention . g4 all g3 personnel . this is not a [stutter:2]test .\npower blast g2 detected . source unknown g5 the [stutter:2]u [speed:0.95]n g o c .\nhit zone , g3 main core .\nt minus 180 [stutter:1]seconds .\nall protection [stutter:3]g4 [stutter:1]system [speed:0.95]offline . [speed:0.3]g4\n\n [speed_all:0.93] all g4 [stutter:2]containment unit [stutter:1]has [speed:0.95]been [stutter:2]open . [speed:1]evacuate g3 g2 pro- [speed:0.2]g2 [stutter:6]closed .\nsurvive percent for site g3 personnel , 0 0 0 [stutter:2]percent . [speed:0.2]g3\n\nstay at your site . g1 do not [stutter:3]attempt to [stutter:1]g2 g1 pre- .\nthis message [stutter:2]will g3 not [speed:0.92]repeat . . \n[speed_all:0.9] this g4 message will g3 [stutter:1]not repeat . .\n[speed_all:0.79] this message g4 [speed:0.75]will [stutter:4]g3 not repeat g5",
+  "666": "a b c d e f g r"
+}
