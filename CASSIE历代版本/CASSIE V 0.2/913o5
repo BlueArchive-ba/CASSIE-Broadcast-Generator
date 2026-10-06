@@ -1,0 +1,26 @@
+[stutter:1]o5 protocol activated . alpha , beta , gamma , omega , delta , zeta , lambda , [stutter:1]sigma and omicron warhead will all be [stutter:1]detonated g4 . t minus 180 g3 [stutter:2]seconds . g1 g5 all personnel have been [stutter:3]evacuate immediately g2 . i [stutter:1]repeat . all warhead will [stutter:1]be detonated in [stutter:3]t minus g6 180 seconds . g3 evacuate now
+[stutter:1]t [stutter:1]minus 180 seconds . g1 all facility checkpoint and [stutter:1]elevator system are [stutter:2]now lockdown . warning g2 [stutter:3]system failure detected
+[stutter:1]t minus 120 [stutter:2]seconds . system [stutter:2]turn into g3 g5 internal operation [stutter:2]caution
+[stutter:1]t [stutter:2]minus 90 seconds . g1 all [stutter:2]unnecessary system offline g2 [stutter:2]security g3 [stutter:3]failure
+[stutter:1]t [stutter:3]minus 60 seconds . g1 all warhead [stutter:3]get ready for g1 blast sequence start g2 . sequence [stutter:4]cannot be disengaged g3 [stutter:2]attention g4
+[stutter:1]t [stutter:2]minus 30 seconds . g1 [stutter:2]shut down all cassie system . g2 g3 central+autonomic+service+system+for+internal+emergencies g5 . g2 g3 [stutter:2]now offline g6
+[stutter:1]emergency broadcast . g1 reactor system failure . all [stutter:2]personnel attention . g2 shelter access is now [stutter:2]available . reactor failure in [stutter:3]about 240 seconds . [stutter:2]core temperature 1800 degrees celsius . g3 proceed to reactor [stutter:2]control [stutter:4]room immediately to repair system . repeat . proceed to reactor control room [stutter:1]immediately to repair [stutter:3]system . g4
+[stutter:1]reactor failure in [stutter:2]about 180 seconds . g1 core temperature 2800 degrees celsius . proceed [stutter:2]to reactor control room immediately . g2
+[stutter:1]reactor failure in [stutter:2]about 120 seconds . g1 core temperature 3800 [stutter:2]degrees celsius . main system is now offline . g2 emergency system is now activated . evacuation helicopter in 60 seconds . g3
+[stutter:1]reactor failure in [stutter:2]about 90 [stutter:2]seconds . g1 core temperature 5200 degrees celsius . g2 emergency [stutter:2]system has been stopped . g3 evacuation helicopter [stutter:2]is now enter the facility . g4
+[stutter:1]reactor failure in [stutter:4]about 60 seconds . g1 core temperature 6800 [stutter:2]degrees celsius . evacuation helicopter has left [stutter:2]the facility . g2 all facility shelter are now closed . g3
+[stutter:2]reactor [stutter:1]failure in [stutter:4]about 30 seconds . g1 core [stutter:3]temperature 8500 degrees celsius . all facility checkpoint and [stutter:3]elevator system are now [stutter:2]lock ed down . g2 reactor failure is [stutter:2]now [stutter:1]confirm ed . [stutter:1]g3
+
+
+
+
+mobile task force unit , epsilon 11 , designated , alpha 2 , has enter ed the facility . all remaining personnel are advise ed to proceed with standard evacuation protocol until an mtf squad reach your destination . awating+recontainment . 3 scp+subjects
+
+
+
+
+
+JSON:
+run:{"command":[{"type":"stutter:6","space_after":"false","at":"5"},{"type":"speed:0.6","space_after":"true","at":"2"}]}
+
+[mtf: e, 11, run: {"z_index": 1, "condition": "enable_bell", "command": [{"type": "stutter:6", "space_after": "false", "at": "5", "level": 1}, {"type": "speed:0.6", "space_after": "true", "at": "2", "level": 0}, {"if": "enable_number_reading", "then": {"type": "gap:0.3", "space_after": "true", "at": "8", "level": 1}, "else": {"type": "speed:2", "space_after": "true", "at": "8", "level": 0}}]}]
