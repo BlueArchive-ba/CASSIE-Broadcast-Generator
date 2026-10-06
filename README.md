@@ -35,6 +35,20 @@
 
 ## 快速开始
 
+> ### ⚠️ 先下载音频素材
+>
+> 本仓库和 [发布包](https://github.com/BlueArchive-ba/CASSIE-Broadcast-Generator/releases)
+> **都不包含音频素材**，必须单独下载，否则程序无法生成任何广播。
+>
+> ```bash
+> cd CASSIE语音生成
+> python cassie_download.py      # 需要能访问 GitHub
+> ```
+>
+> 素材会安装到版本目录下的 `cassie/`。
+> 忘了这一步也不要紧：程序启动时会在终端打印醒目提示，网页上也会显示提示条并给出期望目录，
+> `python diagnostic.py` 同样会提醒。
+
 ```bash
 cd "CASSIE历代版本/CASSIE V 1.0.0"
 
@@ -45,17 +59,20 @@ python cassie_play.py            # 启动
 
 然后打开 <http://localhost:8080/cassie_play>。
 
-### 音频素材
+### 音频素材在哪
 
-**素材不在仓库里**（体积大，且属于游戏原素材）。请运行下载器获取：
+素材不随仓库分发（体积大，且属于游戏原素材）。获取方式：
 
-```bash
-cd CASSIE语音生成
-python cassie_download.py
-```
+1. **推荐**：运行 `CASSIE语音生成/cassie_download.py`，自动下载并解压到正确位置
+2. 手动从 [发布页](https://github.com/BlueArchive-ba/CASSIE-Broadcast-Generator/releases) 下载
 
-下载器需要能正常访问 GitHub。素材会安装到版本目录下的 `cassie/`
-（`words/` 单词、`sounds/` 铃声、`alarms/` 警报）。
+程序会**主动检查**素材是否就位，三种情况下都会明确告诉你：
+
+| 时机 | 表现 |
+|---|---|
+| 启动服务 | 终端打印红框提示，含期望目录与下载命令 |
+| 打开网页 | 页面上方显示提示条，并给出完整路径 |
+| 运行诊断 | `diagnostic.py` 输出专门的提示块 |
 
 ---
 

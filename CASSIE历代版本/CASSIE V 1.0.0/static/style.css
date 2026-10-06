@@ -821,6 +821,47 @@ body {
     color: var(--red-bright);
 }
 
+/* 素材缺失提示：新用户第一眼就该看到，压在终端上方 */
+.assets-warning {
+    margin-top: 12px;
+    padding: 14px 18px;
+    border-left: 3px solid var(--red);
+}
+
+.assets-warning[hidden] {
+    display: none;
+}
+
+.assets-warning-title {
+    color: var(--red-bright);
+    font-size: 13.5px;
+    font-weight: 600;
+    margin-bottom: 8px;
+}
+
+.assets-warning-body {
+    font-size: 12.5px;
+    line-height: 1.7;
+}
+
+.assets-warning-body p {
+    margin: 4px 0;
+}
+
+.assets-warning-body code {
+    padding: 1px 5px;
+    font-family: var(--font-mono);
+    font-size: 12px;
+}
+
+.assets-warning-path code {
+    color: var(--text-soft);
+}
+
+.assets-warning-body a {
+    color: var(--blue-bright);
+}
+
 .device-manual {
     width: 100%;
     margin-top: 6px;

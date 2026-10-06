@@ -4,12 +4,12 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title data-i18n="app.title">C.A.S.S.I.E. 广播生成器</title>
-    <link rel="stylesheet" href="/static/glass.css?v=20261108-1">
-    <link rel="stylesheet" href="/static/style.css?v=20261108-1">
-    <link rel="stylesheet" href="/static/advanced.css?v=20261108-1">
-    <script src="/static/i18n.js?v=20261108-1" defer></script>
-    <script src="/static/i18n-strings.js?v=20261108-1" defer></script>
-    <script src="/static/app.js?v=20261108-1" defer></script>
+    <link rel="stylesheet" href="/static/glass.css?v=20261109-1">
+    <link rel="stylesheet" href="/static/style.css?v=20261109-1">
+    <link rel="stylesheet" href="/static/advanced.css?v=20261109-1">
+    <script src="/static/i18n.js?v=20261109-1" defer></script>
+    <script src="/static/i18n-strings.js?v=20261109-1" defer></script>
+    <script src="/static/app.js?v=20261109-1" defer></script>
 </head>
 <body>
     <div class="container">
@@ -61,6 +61,25 @@
                     </label>
                     <input type="range" id="speedSlider" min="-20" max="20" step="1" value="-10">
                 </div>
+            </div>
+        </div>
+
+        <div class="assets-warning panel" id="assetsWarning" hidden>
+            <div class="assets-warning-title">
+                <span data-i18n="assets.title">没有找到音频素材</span>
+            </div>
+            <div class="assets-warning-body">
+                <p data-i18n="assets.why">本仓库和发布包都<strong>不包含音频素材</strong>，需要单独下载后程序才能生成广播。</p>
+                <p data-i18n-html="assets.how">运行 <code>CASSIE语音生成/cassie_download.py</code> 即可自动下载并解压到正确位置。</p>
+                <p class="assets-warning-path">
+                    <span data-i18n="assets.where">期望目录：</span>
+                    <code id="assetsWarningPath">cassie/words</code>
+                </p>
+                <p>
+                    <a href="https://github.com/BlueArchive-ba/CASSIE-Broadcast-Generator/releases"
+                       target="_blank" rel="noopener"
+                       data-i18n="assets.releases">打开发布页</a>
+                </p>
             </div>
         </div>
 

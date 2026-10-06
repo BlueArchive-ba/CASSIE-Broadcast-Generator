@@ -45,6 +45,10 @@ PROJECT_VERSION = '1.0.0'
 # 拖尾系数达到这个值就不需要淡出（正好是历史行为，尾部本身已经衰减到听不见）
 CASSIE_TAIL_FADE_REFERENCE = 0.35
 
+# 音频素材与发布包都不随仓库分发，缺素材时把用户引到这里
+RELEASES_URL = 'https://github.com/BlueArchive-ba/CASSIE-Broadcast-Generator/releases'
+ASSETS_DOWNLOAD_URL = RELEASES_URL
+
 # [preset:名字] 展开的最大层数，兜底防止环引用把内存吃满
 MAX_PRESET_DEPTH = 16
 
@@ -152,6 +156,11 @@ MESSAGES = {
         'startup_outdated_hint': '  ← 请确认运行的是最新代码',
         'startup_health_hint': '  /api/v1/health 可查看同样的信息（改了后端务必重启本进程）',
         'startup_open_browser': '请在浏览器中访问 http://localhost:{port}/cassie_play',
+        'assets_missing_title': '!! 没有找到音频素材，现在还不能生成任何广播。',
+        'assets_missing_where': '   期望目录: {path}',
+        'assets_missing_how': '   请运行 CASSIE语音生成/cassie_download.py 下载素材，',
+        'assets_missing_how2': '   或从发布页获取: {url}',
+        'assets_missing_after': '   下载完成后重启本程序。',
     },
     'en': {
         'content_empty': 'Content cannot be empty',
@@ -234,6 +243,11 @@ MESSAGES = {
         'startup_health_hint': '  /api/v1/health shows the same information '
                                '(always restart this process after backend changes)',
         'startup_open_browser': 'Open http://localhost:{port}/cassie_play in your browser',
+        'assets_missing_title': '!! Audio assets not found — no broadcast can be generated yet.',
+        'assets_missing_where': '   Expected directory: {path}',
+        'assets_missing_how': '   Run CASSIE语音生成/cassie_download.py to fetch the assets,',
+        'assets_missing_how2': '   or get them from the releases page: {url}',
+        'assets_missing_after': '   Restart this program once the download finishes.',
     },
 }
 
@@ -3660,6 +3674,21 @@ def api_play_preset(name):
 if __name__ == '__main__':
     _health = cassie.health()
     _missing = [name for name, present in _health['features'].items() if not present]
+    _library = _health['library']
+
+    # 素材缺失时放在最前面说清楚：这是新用户最容易卡住的地方，
+    # 埋在后面的功能指纹里他们看不到。
+    if not _library['word_files']:
+        print()
+        print('=' * 68)
+        print(tr('assets_missing_title'))
+        print(tr('assets_missing_where', path=_library['words_dir']))
+        print(tr('assets_missing_how'))
+        print(tr('assets_missing_how2', url=ASSETS_DOWNLOAD_URL))
+        print(tr('assets_missing_after'))
+        print('=' * 68)
+        print()
+
     print(tr('startup_banner', version=PROJECT_VERSION, started_at=_health['started_at']))
     print(tr('startup_quality_levels', count=_health['spatial_quality_levels']))
     print(tr('startup_fingerprint',

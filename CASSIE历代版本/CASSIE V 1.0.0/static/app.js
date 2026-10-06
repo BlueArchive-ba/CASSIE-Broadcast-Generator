@@ -1422,6 +1422,27 @@ on(playBtn, 'click', playBroadcast);
             }
         });
 
+        // 素材不随仓库和发布包分发，缺素材时页面上必须直说，
+        // 否则新用户只会看到"输入什么都没反应"。
+        function checkAssets() {
+            var box = document.getElementById('assetsWarning');
+            if (!box) return;
+            apiFetch('/api/v1/health')
+                .then(function(response) { return response.json(); })
+                .then(function(payload) {
+                    var library = payload && payload.data && payload.data.library;
+                    if (!library) return;
+                    if (library.word_files > 0) {
+                        box.hidden = true;
+                        return;
+                    }
+                    var path = document.getElementById('assetsWarningPath');
+                    if (path && library.words_dir) path.textContent = library.words_dir;
+                    box.hidden = false;
+                })
+                .catch(function() { /* 拿不到状态就不打扰用户 */ });
+        }
+
         window.addEventListener('cassie:langchange', function() {
             refreshQualityLevels();
             if (presetModal && presetModal.classList.contains('show') &&
@@ -1431,5 +1452,7 @@ on(playBtn, 'click', playBroadcast);
         });
 
         syncAllRangeFills();
+
+        checkAssets();
 
         window.addEventListener('DOMContentLoaded', startAudioMonitor);

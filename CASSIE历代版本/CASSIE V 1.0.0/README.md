@@ -42,6 +42,11 @@ pip install rich
 下载器位于仓库的 `CASSIE语音生成/` 目录（内含 `cassie_download.py` 与对应 Python 版本的运行环境），
 运行后素材会安装到本目录的 `cassie/`。
 
+> **素材不随仓库和发布包分发**，必须单独下载，否则程序无法生成任何广播。
+> 缺素材时启动会在终端打印醒目提示，网页上也会显示同样的提示条并给出期望目录。
+> 不想用下载器也可以从
+> [发布页](https://github.com/BlueArchive-ba/CASSIE-Broadcast-Generator/releases) 获取。
+
 除 ffmpeg 和 rich 外，优先运行诊断工具。诊断工具会逐项检查缺失的第三方库，并询问是否使用当前 Python 自动安装：
 
 ```bash

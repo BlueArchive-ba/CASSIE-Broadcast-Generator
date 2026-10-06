@@ -444,6 +444,26 @@ def main():
     else:
         console.print("\n[dim]没有检测到可自动修复的问题。[/dim]")
 
+    # 素材缺失是新用户最常见的卡点，单独给一块可照着做的说明
+    words_dir = 'cassie/words/'
+    words_present = os.path.exists(words_dir) and any(
+        name.endswith('.wav') for name in os.listdir(words_dir))
+    if not words_present:
+        console.print()
+        console.print(Panel(
+            "[bold red]没有找到音频素材[/bold red]\n\n"
+            "本仓库和发布包都[bold]不包含音频素材[/bold]，"
+            "必须单独下载后程序才能生成广播。\n\n"
+            "运行下载器（推荐，会自动解压到正确位置）：\n"
+            "  [bold cyan]cd ../CASSIE语音生成[/bold cyan]\n"
+            "  [bold cyan]python cassie_download.py[/bold cyan]\n\n"
+            "或从发布页获取：\n"
+            "  [link]https://github.com/BlueArchive-ba/CASSIE-Broadcast-Generator/releases[/link]\n\n"
+            "[dim]下载完成后重新运行本诊断工具确认。[/dim]",
+            box=box.ROUNDED,
+            border_style="red",
+        ))
+
     console.print()
     console.print(Panel.fit(
         f"[bold]诊断完成[/bold]\n"
