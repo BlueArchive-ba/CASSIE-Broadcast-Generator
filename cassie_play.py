@@ -18,13 +18,15 @@ import numpy as np
 import colorednoise as cn
 
 
-AUDIO_BASE_PATH = "cassie/words/"
-SOUND_BASE_PATH = "cassie/sounds/"
+
+PROJECT_BASE_PATH = os.path.dirname(os.path.abspath(__file__))
+AUDIO_BASE_PATH = os.path.join(PROJECT_BASE_PATH, "cassie", "words")
+SOUND_BASE_PATH = os.path.join(PROJECT_BASE_PATH, "cassie", "sounds")
 AUDIO_EXTENSION = ".wav"
-PRESET_FILE = "presets.json"
+PRESET_FILE = os.path.join(PROJECT_BASE_PATH, "presets.json")
 
 pygame.mixer.init()
-pygame.mixer.set_num_channels(4)
+pygame.mixer.set_num_channels(9)
 
 nato_map = {
     'alpha': 'a', 'bravo': 'b', 'charlie': 'c', 'delta': 'd',
@@ -41,12 +43,14 @@ class CASSIETerminal:
         self.is_playing = False
         self.enable_bell = False
         self.enable_special_bell = False
+        self.special_bell_start = 'bell_start.wav'
+        self.special_bell_end = 'bell_end.wav'
         self.enable_number_reading = False
         self.verbose_mode = False
         self.stop_requested = False
         self.stutter_duration = 0.14
         self.word_channel = 0
-        self.bell_channel = 1
+        self.bell_channel = 8
         self.current_input = ""
         self.preset_file = PRESET_FILE
         self.word_set = self.load_word_set()
@@ -56,6 +60,8 @@ class CASSIETerminal:
         self.alert_thread = None
         self.alert_running = False
         self.alert_stop = threading.Event()
+        self.bell_lock = threading.Lock()
+        self.play_lock = threading.Lock()
         self.bell_lead_time = 3
         self.bell_extra_duration = 3.0
 
@@ -64,21 +70,21 @@ class CASSIETerminal:
         self.low_cut_freq = 0
         self.high_cut_freq = 0
         self.mid_boost_gain = 2.0
-        self.overdrive_gain = 7.0
-        self.clip_threshold = 1.85
+        self.overdrive_gain = 0.0
+        self.clip_threshold = 0.0
         self.compressor_threshold = -12.0
         self.compressor_ratio = 6.0
         self.compressor_attack = 2.0
         self.compressor_release = 50.0
         self.reverb_delay = 100.0
-        self.reverb_decay = 9000.0
-        self.reverb_wet = 0.70
+        self.reverb_decay = 3000.0
+        self.reverb_wet = 0.30
         self.reverb_early_reflections = False
         self.noise_volume = -35.0
         self.noise_type = 'pink'
         self.reverb_lowpass = 2000
-        self.treble_stretch = 5.0
-        self.reverb_high_gain = 100.0
+        self.treble_stretch = 800.0
+        self.treble_tail_gain = -28.0
         self.hiss_enabled = True
         self.hiss_start_freq = 2000.0
         self.hiss_duration = 4000.0
@@ -101,7 +107,8 @@ class CASSIETerminal:
         for letter in 'abcdefghijklmnopqrstuvwxyz':
             word_set.add('_' + letter)
         for i in range(1, 10):
-            word_set.add(f'g{i}')
+            if os.path.exists(os.path.join(AUDIO_BASE_PATH, f'g{i}{AUDIO_EXTENSION}')):
+                word_set.add(f'g{i}')
         return word_set
 
     def load_presets(self):
@@ -134,6 +141,30 @@ class CASSIETerminal:
         except:
             return 0.5
 
+    def get_special_bell_path(self, filename, fallback):
+        candidates = [
+            os.path.join(SOUND_BASE_PATH, filename),
+            os.path.join(AUDIO_BASE_PATH, filename)
+        ]
+        for path in candidates:
+            if os.path.exists(path):
+                return path
+        return os.path.join(SOUND_BASE_PATH, fallback)
+
+    def stop_all_audio(self):
+        self.stop_all_alerts()
+        for channel in range(pygame.mixer.get_num_channels()):
+            pygame.mixer.Channel(channel).stop()
+
+    def wait_for_channels(self, channels=None, timeout=600):
+        channels = list(range(pygame.mixer.get_num_channels())) if channels is None else channels
+        deadline = time.monotonic() + timeout
+        while time.monotonic() < deadline:
+            if not any(pygame.mixer.Channel(channel).get_busy() for channel in channels):
+                return True
+            time.sleep(0.01)
+        return False
+
 
 
 
@@ -155,6 +186,51 @@ class CASSIETerminal:
             sample_width=sample_width,
             channels=channels
         )
+
+    def generate_treble_tail(self, audio):
+        """从音频高频成分中提取主频，生成平滑衰减的高频尾音。"""
+        duration_ms = max(0.0, float(self.treble_stretch))
+        if duration_ms <= 0 or len(audio) < 20:
+            return AudioSegment.empty()
+
+        try:
+            high_band = audio.high_pass_filter(1500)
+            samples = np.asarray(high_band.get_array_of_samples(), dtype=np.float64)
+            if high_band.channels > 1:
+                samples = samples.reshape((-1, high_band.channels)).mean(axis=1)
+            if samples.size < 32:
+                return AudioSegment.empty()
+
+            window_size = min(samples.size, max(256, int(high_band.frame_rate * 0.12)))
+            analysis = samples[-window_size:]
+            analysis *= np.hanning(analysis.size)
+            spectrum = np.abs(np.fft.rfft(analysis))
+            frequencies = np.fft.rfftfreq(analysis.size, 1.0 / high_band.frame_rate)
+            upper_frequency = min(12000.0, high_band.frame_rate / 2.0 - 100.0)
+            valid = (frequencies >= 1500.0) & (frequencies <= upper_frequency)
+            if not np.any(valid):
+                return AudioSegment.empty()
+            peak_index = np.where(valid)[0][np.argmax(spectrum[valid])]
+            frequency = frequencies[peak_index]
+            rms = float(np.sqrt(np.mean(analysis ** 2)))
+            if rms < 1.0:
+                return AudioSegment.empty()
+
+            sample_count = max(1, int(duration_ms * high_band.frame_rate / 1000.0))
+            time_axis = np.arange(sample_count, dtype=np.float64) / high_band.frame_rate
+            envelope = np.exp(-3.0 * time_axis / max(duration_ms / 1000.0, 0.001))
+            fade_in = min(sample_count, int(high_band.frame_rate * 0.008))
+            if fade_in > 1:
+                envelope[:fade_in] *= np.linspace(0.0, 1.0, fade_in)
+            amplitude = min(32767.0, rms * (10.0 ** (self.treble_tail_gain / 20.0)))
+            tail = np.sin(2.0 * np.pi * frequency * time_axis) * envelope * amplitude
+            tail = np.clip(tail, -32768, 32767).astype(np.int16)
+            if audio.channels > 1:
+                tail = np.tile(tail[:, None], (1, audio.channels)).reshape(-1)
+            return AudioSegment(tail.tobytes(), frame_rate=audio.frame_rate,
+                                sample_width=2, channels=audio.channels)
+        except Exception:
+            return AudioSegment.empty()
 
     def apply_broadcast_effect(self, audio):
         if not self.broadcast_effect_enabled:
@@ -203,8 +279,6 @@ class CASSIETerminal:
                         else:
                             gain_factor = base_factor
                     gain_db = 20 * math.log10(max(gain_factor, 0.0001))
-                    high_boost = (i / num_taps) * 20 * self.treble_stretch
-                    gain_db = gain_db + high_boost
                     delays.append((delay_ms, gain_db))
                 for delay_ms, gain_db in sorted(delays, key=lambda x: x[0], reverse=True):
                     delayed = reverb_audio
@@ -219,6 +293,9 @@ class CASSIETerminal:
                         position=delay_ms,
                         gain_during_overlay=gain_db
                     )
+            treble_tail = self.generate_treble_tail(audio)
+            if len(treble_tail) > 0:
+                audio = audio.append(treble_tail, crossfade=min(8, len(treble_tail)))
             if self.noise_volume < 0:
                 noise = self.generate_noise(
                     duration_ms=len(audio),
@@ -239,17 +316,7 @@ class CASSIETerminal:
 
     
 
-    def play_audio_on_channel(self, channel, filepath, start_delay=0, pitch=1.0, speed=0):
-        if start_delay > 0:
-            time.sleep(start_delay)
-        if not os.path.exists(filepath):
-            return
-        
-
-        
-        with open(filepath, 'rb') as f:
-            audio = AudioSegment.from_wav(f)
-        
+    def _prepare_audio(self, audio, pitch=1.0, speed=0):
         if pitch != 1.0:
             new_frame_rate = int(audio.frame_rate * pitch)
             audio = audio._spawn(audio.raw_data, overrides={'frame_rate': new_frame_rate})
@@ -267,17 +334,58 @@ class CASSIETerminal:
 
         if self.broadcast_effect_enabled:
             audio = self.apply_broadcast_effect(audio)
-        
+
+        return audio
+
+    def _play_audio_segment(self, channel, audio, wait=True):
         processed_duration = len(audio) / 1000.0
 
-        
-        export_path = os.path.join(tempfile.gettempdir(), 'temp_audio.wav')
-        audio.export(export_path, format="wav")
-        sound = pygame.mixer.Sound(export_path)
-        pygame.mixer.Channel(channel).play(sound)
-        time.sleep(processed_duration)
+        temp_file = tempfile.NamedTemporaryFile(suffix='.wav', delete=False)
+        export_path = temp_file.name
+        temp_file.close()
+        try:
+            audio.export(export_path, format="wav")
+            sound = pygame.mixer.Sound(export_path)
+            pygame.mixer.Channel(channel).play(sound)
+            if wait:
+                time.sleep(processed_duration)
+            return processed_duration
+        finally:
+            if os.path.exists(export_path):
+                os.unlink(export_path)
 
-    def play_stutter(self, filepath, stutter_count, pitch=1.0, speed=0, channel=None, full_play=True):
+    def play_audio_on_channel(self, channel, filepath, start_delay=0, pitch=1.0, speed=0, wait=True):
+        if start_delay > 0:
+            time.sleep(start_delay)
+        if not os.path.exists(filepath):
+            return
+
+        with open(filepath, 'rb') as f:
+            audio = AudioSegment.from_wav(f)
+
+        if pitch == 1.0 and speed == 0 and not self.broadcast_effect_enabled:
+            sound = pygame.mixer.Sound(filepath)
+            pygame.mixer.Channel(channel).play(sound)
+            duration = self.get_audio_duration(filepath)
+            if wait:
+                time.sleep(duration)
+            return duration
+
+        return self._play_audio_segment(
+            channel, self._prepare_audio(audio, pitch=pitch, speed=speed), wait=wait)
+
+    def play_number_on_channel(self, channel, words, pitch=1.0, speed=0, wait=True):
+        audio = AudioSegment.empty()
+        for word in words:
+            filepath = os.path.join(AUDIO_BASE_PATH, word + AUDIO_EXTENSION)
+            if os.path.exists(filepath):
+                audio += AudioSegment.from_wav(filepath)
+        if len(audio) == 0:
+            return
+        return self._play_audio_segment(
+            channel, self._prepare_audio(audio, pitch=pitch, speed=speed), wait=wait)
+
+    def play_stutter(self, filepath, stutter_count, pitch=1.0, speed=0, channel=None, full_play=True, wait=True):
         if channel is None:
             channel = self.word_channel
 
@@ -304,25 +412,36 @@ class CASSIETerminal:
             if start_cut > 0 or end_cut > 0:
                 audio = audio[start_cut:len(audio)-end_cut]
 
-        export_path = "/tmp/temp_stutter.wav"
+        temp_file = tempfile.NamedTemporaryFile(suffix='.wav', delete=False)
+        export_path = temp_file.name
+        temp_file.close()
         audio.export(export_path, format="wav")
-
-        if speed > 0:
-            wait_time = (speed / 20) * 1.0
-            time.sleep(wait_time)
 
         duration = self.get_audio_duration(export_path)
         stutter_duration = min(duration, self.stutter_duration)
         sound = pygame.mixer.Sound(export_path)
 
-        for _ in range(stutter_count):
-            pygame.mixer.Channel(channel).play(sound)
-            time.sleep(stutter_duration)
-            pygame.mixer.Channel(channel).stop()
+        total_duration = stutter_duration * stutter_count + (duration if full_play else 0)
 
-        if full_play:
-            pygame.mixer.Channel(channel).play(sound)
-            time.sleep(duration)
+        def play_sequence():
+            for _ in range(stutter_count):
+                pygame.mixer.Channel(channel).play(sound)
+                time.sleep(stutter_duration)
+                pygame.mixer.Channel(channel).stop()
+            if full_play:
+                pygame.mixer.Channel(channel).play(sound)
+                time.sleep(duration)
+
+        try:
+            if wait:
+                play_sequence()
+            else:
+                thread = threading.Thread(target=play_sequence, daemon=True)
+                thread.start()
+            return total_duration
+        finally:
+            if os.path.exists(export_path):
+                os.unlink(export_path)
 
     
 
@@ -332,7 +451,9 @@ class CASSIETerminal:
         integer_part = int(parts[0])
         decimal_part = parts[1] if len(parts) > 1 else None
         result = []
-        if integer_part > 0:
+        if integer_part == 0:
+            result.append('0')
+        elif integer_part > 0:
             if integer_part <= 20:
                 result.append(str(integer_part))
             elif integer_part < 100:
@@ -383,18 +504,17 @@ class CASSIETerminal:
         return result
 
     def play_bell_audio(self, filepath):
-        def play():
-            if not os.path.exists(filepath):
-                return
+        if not os.path.exists(filepath):
+            return 0
+        with self.bell_lock:
+            channel = pygame.mixer.Channel(self.bell_channel)
+            channel.stop()
             sound = pygame.mixer.Sound(filepath)
-            pygame.mixer.Channel(self.bell_channel).play(sound)
-            time.sleep(self.get_audio_duration(filepath))
-        thread = threading.Thread(target=play)
-        thread.daemon = True
-        thread.start()
+            channel.play(sound)
+        return self.get_audio_duration(filepath)
 
     def play_alert(self, alert_id, mode):
-        template_path = "template_library.json"
+        template_path = os.path.join(PROJECT_BASE_PATH, "template_library.json")
         with open(template_path, 'r', encoding='utf-8') as f:
             data = json.load(f)
         found = None
@@ -432,6 +552,120 @@ class CASSIETerminal:
             self.alert_thread.join(timeout=0.5)
         pygame.mixer.Channel(self.bell_channel).stop()
 
+    def parse_broadcast_text(self, text, enable_number_reading=None):
+        """解析广播文本；此函数只生成播放队列，不执行播放或修改播放状态。"""
+        if not text or not text.strip():
+            return {'queue': [], 'errors': ['内容不能为空']}
+
+        errors = []
+
+        def replace_command(pattern, builder):
+            nonlocal text
+            while True:
+                match = re.search(pattern, text)
+                if not match:
+                    return
+                replacement = builder(match)
+                if replacement is None:
+                    text = text.replace(match.group(0), '')
+                else:
+                    text = text.replace(match.group(0), replacement, 1)
+
+        def build_cd(match):
+            parts = [part.strip() for part in match.group(1).split(',')]
+            if len(parts) < 2:
+                errors.append('CD 指令参数不足：[cd:start,end,separator]')
+                return ''
+            try:
+                start = int(parts[0])
+                end = int(parts[1])
+            except ValueError:
+                errors.append('CD 指令的起止值必须是整数')
+                return ''
+            if start == end:
+                errors.append('CD 指令的起止值不能相同')
+                return ''
+            separator = parts[2] if len(parts) > 2 else ' . '
+            step = -1 if start > end else 1
+            numbers = range(start, end + step, step)
+            return separator.join(str(number) for number in numbers)
+
+        def build_mtf(match):
+            parts = [part.strip() for part in match.groups()]
+            if (not parts[0] or not parts[2] or
+                    not all(part.isdigit() and int(part) > 0 for part in (parts[1], parts[3], parts[4]))):
+                errors.append('MTF 指令参数无效：[mtf:word1,number1,word2,number2,scp_count]')
+                return ''
+            subject = 'scp+subject' if int(parts[4]) == 1 else 'scp+subjects'
+            return ('mobile+task+force+unit {0} {1} designated {2} {3} '
+                    'has+entered+the+facility . all+remaining+personnel . '
+                    'awating+recontainment . {4} {5} . ').format(
+                        parts[0], parts[1], parts[2], parts[3], parts[4], subject)
+
+        def build_backup(match):
+            word = match.group(1).strip()
+            if not word:
+                errors.append('backup 指令缺少单位名称')
+                return ''
+            return '{} backup unit has+entered+the+facility . '.format(word)
+
+        def build_warhead(match):
+            number = match.group(1).strip()
+            mode = match.group(2).strip().lower()
+            if mode not in ('start', 'resume', 'cancelled'):
+                errors.append('warhead 指令类型必须是 start、resume 或 cancelled')
+                return ''
+            if mode != 'cancelled' and (not number.isdigit() or int(number) < 1):
+                errors.append('warhead 指令的倒计时必须是正整数')
+                return ''
+            return 'warhead+cancelled' if mode == 'cancelled' else 'warhead+{} {}s'.format(mode, number)
+
+        def build_hostile(match):
+            number, word1, word2, word3 = [part.strip() for part in match.groups()]
+            if not number.isdigit() or int(number) < 1 or not word1 or not word2:
+                errors.append('hostile_enter 指令参数无效')
+                return ''
+            return 'attention , all personnel . detected {} {} at {} . {} . '.format(
+                number, word1, word2, word3 or 'lethal force authorized')
+
+        replace_command(r'\[cd:([^\]]+)\]', build_cd)
+        replace_command(r'\[mtf:([^,]+),([^,]+),([^,]+),([^,]+),([^,]+)\]', build_mtf)
+        replace_command(r'\[backup:([^\]]+)\]', build_backup)
+        replace_command(r'\[warhead:([^,]+),([^,]+)\]', build_warhead)
+        replace_command(r'\[hostile_enter:([^,]+),([^,]+),([^,]+),([^,]+)\]', build_hostile)
+
+        error_count = 0
+        error_match = re.search(r'\[error:(\d+)\]', text)
+        if error_match:
+            error_count = int(error_match.group(1))
+            text = re.sub(r'\[error:\d+\]', '', text)
+
+        segments = re.sub(r'\s+', ' ', text).strip().lower().split()
+        queue = []
+        previous_number_mode = self.enable_number_reading
+        if enable_number_reading is not None:
+            self.enable_number_reading = enable_number_reading
+        for index, segment in enumerate(segments):
+            parsed = self.parse_segment(segments, index)
+            if parsed:
+                queue.extend(parsed)
+            else:
+                errors.append('[未找到] ' + segment)
+        self.enable_number_reading = previous_number_mode
+
+        if error_count > 0:
+            word_indices = [index for index, item in enumerate(queue) if item[0] == 'word']
+            available_glitches = [name for name in self.word_set if re.match(r'^g\d+$', name)]
+            if word_indices and available_glitches:
+                for position in sorted(random.sample(word_indices, min(error_count, len(word_indices))), reverse=True):
+                    original = queue[position][1]
+                    if random.choice([True, False]):
+                        queue.insert(position, ('word', random.choice(available_glitches)))
+                    else:
+                        queue[position] = ('stutter', original, random.randint(1, 4))
+
+        return {'queue': queue, 'errors': errors}
+
     def parse_segment(self, segments, current_index):
         if not segments or current_index >= len(segments):
             return []
@@ -460,8 +694,6 @@ class CASSIETerminal:
             return []
 
         if segment.startswith('[gap:'):
-            if segment == '[gap:none]':
-                return [('gap', None)]
             try:
                 gap_value = float(segment[5:-1])
                 if gap_value >= 0:
@@ -480,15 +712,15 @@ class CASSIETerminal:
 
         if segment.startswith('[alert:'):
             if segment == '[alert:none]':
-                self.stop_all_alerts()
-                return []
+                return [('alert_stop',)]
             try:
                 inner = segment[7:-1]
                 parts = inner.split(',')
                 alert_id = parts[0].strip()
                 mode = parts[1].strip() if len(parts) > 1 else 'once'
-                self.play_alert(alert_id, mode)
-                return []
+                if not alert_id:
+                    return []
+                return [('alert', alert_id, mode)]
             except:
                 return []
 
@@ -538,7 +770,7 @@ class CASSIETerminal:
         if self.enable_number_reading and segment.replace('.', '', 1).isdigit():
             num_parts = self.process_number(segment)
             if num_parts:
-                return [('word', p) for p in num_parts]
+                return [('number', num_parts)]
 
         if not self.enable_number_reading:
             if segment.isdigit():
@@ -604,7 +836,7 @@ class CASSIETerminal:
             not_found.append(seg)
         return not_found
 
-    def play_broadcast_stream(self, text):
+    def _legacy_play_broadcast_stream(self, text):
         if self.is_playing:
             yield {"text": "正在播放中，请稍后再试", "type": "error"}
             return
@@ -612,7 +844,6 @@ class CASSIETerminal:
             yield {"text": "内容不能为空", "type": "error"}
             return
 
-        gap_value = None
         error_value = None
 
         while True:
@@ -695,15 +926,24 @@ class CASSIETerminal:
                 break
 
         while True:
-            cmd_match = re.search(r'\[warhead:([^,]+)\]', text)
+            cmd_match = re.search(r'\[warhead:([^,]+),([^,]+)\]', text)
             if cmd_match:
                 parts = [p.strip() for p in cmd_match.groups()]
-                if len(parts) < 1:
-                    yield {"text": "Error: Warhead command missing parameters: [Warhead:number]", "type": "error"}
+                if len(parts) < 2:
+                    yield {"text": "Error: Warhead command missing parameters: [Warhead:number,type(start/cancel/erstart)]", "type": "error"}
                     text = text.replace(cmd_match.group(0), '')
                 else:
                     warhead_number = parts[0]
-                    result = f"warhead+start {warhead_number}s"
+                    warhead_type = parts[1]
+                    if warhead_type == "cancelled":
+                        result = f"warhead+cancelled"
+                    elif warhead_type =="resume":
+                        result = f"warhead+{warhead_type} {warhead_number}s"
+                    elif warhead_type =="start":
+                        result = f"warhead+{warhead_type} {warhead_number}s"
+                    else:
+                        yield {"text": "Error: Warhead command missing parameters: [Warhead:number,type(start/cancel/erstart)]", "type": "error"}
+                        result = f"[speed:0.85]error"
                     text = text.replace(cmd_match.group(0), result)
             else:
                 break
@@ -738,18 +978,6 @@ class CASSIETerminal:
                             text = text.replace(cmd_match.group(0), result)
             else:
                 break
-
-        gap_match = re.search(r'\[gap:([^\]]+)\]', text)
-        if gap_match:
-            gap_raw = gap_match.group(1).strip()
-            if gap_raw == 'none':
-                gap_value = None
-            else:
-                try:
-                    gap_value = float(gap_raw)
-                except:
-                    gap_value = None
-            text = re.sub(r'\[gap:[^\]]+\]', '', text)
 
         error_match = re.search(r'\[error:(\d+)\]', text)
         if error_match:
@@ -806,6 +1034,11 @@ class CASSIETerminal:
                         elif item[0] == 'word':
                             filepath = os.path.join(AUDIO_BASE_PATH, item[1] + AUDIO_EXTENSION)
                             total_duration += self.get_audio_duration(filepath)
+                        elif item[0] == 'number':
+                            total_duration += sum(
+                                self.get_audio_duration(os.path.join(AUDIO_BASE_PATH, word + AUDIO_EXTENSION))
+                                for word in item[1]
+                            )
                     need_seconds = int(total_duration) + 2 + int(self.bell_extra_duration)
                     if need_seconds < 4:
                         need_seconds = 4
@@ -818,12 +1051,9 @@ class CASSIETerminal:
                         yield {"text": "[铃声缺失] bg_" + str(need_seconds) + ".wav", "type": "error"}
                 time.sleep(self.bell_lead_time)
 
-            if gap_value is not None:
-                time.sleep(gap_value)
-
             current_speed_all = self.pitch
             current_channel = self.word_channel
-            total_words = len([item for item in full_queue if item[0] in ('word', 'stutter')])
+            total_words = len([item for item in full_queue if item[0] in ('word', 'number', 'stutter')])
             word_index = 0
             
             for item in full_queue:
@@ -842,6 +1072,8 @@ class CASSIETerminal:
                     if self.verbose_mode:
                         yield {"text": "[停顿] " + str(item[1]) + "秒", "type": "info"}
                     time.sleep(item[1])
+                elif item[0] == 'gap':
+                    time.sleep(item[1])
                 elif item[0] == 'stutter':
                     word_index += 1
                     filepath = os.path.join(AUDIO_BASE_PATH, item[1] + AUDIO_EXTENSION)
@@ -858,6 +1090,12 @@ class CASSIETerminal:
                     if self.verbose_mode:
                         yield {"text": "[" + str(word_index) + "/" + str(total_words) + "] " + item[1] + " (音高 " + str(pitch) + ")", "type": "info"}
                     self.play_audio_on_channel(current_channel, filepath, pitch=pitch, speed=self.speed)
+                elif item[0] == 'number':
+                    word_index += 1
+                    pitch = current_speed_all
+                    if self.verbose_mode:
+                        yield {"text": "[" + str(word_index) + "/" + str(total_words) + "] " + " ".join(item[1]) + " (数字)", "type": "info"}
+                    self.play_number_on_channel(current_channel, item[1], pitch=pitch, speed=self.speed)
 
             if self.enable_bell and self.enable_special_bell:
                 end_file = os.path.join(SOUND_BASE_PATH, "bell_end.wav")
@@ -875,133 +1113,290 @@ class CASSIETerminal:
             self.stop_requested = False
 
 
-    def export_from_queue(self, full_queue, output_path, include_bell=False):
-        if not full_queue:
-            return False, "没有音频可导出"
+    def play_broadcast_stream(self, text, lock_acquired=False):
+        owns_lock = lock_acquired
+        if not owns_lock and not self.play_lock.acquire(False):
+            yield {"text": "正在播放中，请稍后再试", "type": "error"}
+            return
+        owns_lock = True
 
+        try:
+            parsed = self.parse_broadcast_text(text)
+            for error in parsed['errors']:
+                yield {"text": error, "type": "error"}
+            if not parsed['queue']:
+                return
 
-
-
-        channel_audios = {}
-        default_channel = self.word_channel
-        current_ch = default_channel
-        current_speed_all = self.pitch
-
-
-        for item in full_queue:
-            if item[0] == 'channel':
-                if item[1] == -1:
-                    current_ch = default_channel
+            self.is_playing = True
+            queue = parsed['queue']
+            channel_ready = {}
+            if self.enable_bell:
+                if self.enable_special_bell:
+                    start_file = self.get_special_bell_path(self.special_bell_start, 'bell_start.wav')
+                    if os.path.exists(start_file):
+                        self.play_bell_audio(start_file)
+                    else:
+                        yield {"text": "[铃声缺失] {}".format(self.special_bell_start), "type": "error"}
                 else:
-                    current_ch = item[1]
-                continue
-            if item[0] == 'speed_all':
-                current_speed_all = item[1]
-                continue
-            if item[0] not in ('word', 'stutter', 'pause', 'gap'):
-                continue
+                    duration = 0
+                    for item in queue:
+                        if item[0] == 'pause':
+                            duration += item[1]
+                        elif item[0] == 'word':
+                            duration += self.get_audio_duration(os.path.join(AUDIO_BASE_PATH, item[1] + AUDIO_EXTENSION))
+                        elif item[0] == 'number':
+                            duration += sum(
+                                self.get_audio_duration(os.path.join(AUDIO_BASE_PATH, word + AUDIO_EXTENSION))
+                                for word in item[1]
+                            )
+                        elif item[0] == 'stutter':
+                            duration += self.get_audio_duration(os.path.join(AUDIO_BASE_PATH, item[1] + AUDIO_EXTENSION)) * (item[2] + 1)
+                    seconds = max(4, int(duration) + 2 + int(self.bell_extra_duration))
+                    bell_file = os.path.join(SOUND_BASE_PATH, 'bg_{}.wav'.format(seconds))
+                    if os.path.exists(bell_file):
+                        self.play_bell_audio(bell_file)
+                    else:
+                        yield {"text": "[铃声缺失] bg_{}.wav".format(seconds), "type": "error"}
+                time.sleep(max(0, self.bell_lead_time))
 
-            if current_ch not in channel_audios:
-                channel_audios[current_ch] = AudioSegment.empty()
+            current_pitch = self.pitch
+            current_channel = self.word_channel
+            total_words = len([item for item in queue if item[0] in ('word', 'number', 'stutter')])
+            word_index = 0
+            for item in queue:
+                if self.stop_requested:
+                    break
+                item_type = item[0]
+                if item_type == 'channel':
+                    current_channel = self.word_channel if item[1] == -1 else item[1]
+                elif item_type == 'speed_all':
+                    current_pitch = item[1]
+                elif item_type == 'alert_stop':
+                    self.stop_all_alerts()
+                elif item_type == 'alert':
+                    try:
+                        self.play_alert(item[1], item[2])
+                    except Exception as error:
+                        yield {"text": "警报播放失败: {}".format(error), "type": "error"}
+                elif item_type == 'pause':
+                    time.sleep(item[1])
+                elif item_type == 'gap':
+                    ready_at = channel_ready.get(current_channel, 0)
+                    time.sleep(max(0, ready_at - time.monotonic()))
+                    time.sleep(item[1])
+                    channel_ready[current_channel] = time.monotonic()
+                elif item_type == 'stutter':
+                    word_index += 1
+                    ready_at = channel_ready.get(current_channel, 0)
+                    time.sleep(max(0, ready_at - time.monotonic()))
+                    if self.speed > 0 and word_index > 1:
+                        time.sleep(self.speed / 20.0)
+                    pitch = item[3] if len(item) > 3 and item[3] is not None else current_pitch
+                    filepath = os.path.join(AUDIO_BASE_PATH, item[1] + AUDIO_EXTENSION)
+                    duration = self.play_stutter(filepath, item[2], pitch, speed=self.speed,
+                                                 channel=current_channel, full_play=item[4] if len(item) > 4 else True,
+                                                 wait=False)
+                    channel_ready[current_channel] = time.monotonic() + duration
+                elif item_type == 'word':
+                    word_index += 1
+                    ready_at = channel_ready.get(current_channel, 0)
+                    time.sleep(max(0, ready_at - time.monotonic()))
+                    if self.speed > 0 and word_index > 1:
+                        time.sleep(self.speed / 20.0)
+                    pitch = item[2] if len(item) > 2 else current_pitch
+                    filepath = os.path.join(AUDIO_BASE_PATH, item[1] + AUDIO_EXTENSION)
+                    duration = self.play_audio_on_channel(current_channel, filepath, pitch=pitch,
+                                                          speed=self.speed, wait=False)
+                    channel_ready[current_channel] = time.monotonic() + (duration or 0)
+                elif item_type == 'number':
+                    word_index += 1
+                    ready_at = channel_ready.get(current_channel, 0)
+                    time.sleep(max(0, ready_at - time.monotonic()))
+                    if self.speed > 0 and word_index > 1:
+                        time.sleep(self.speed / 20.0)
+                    duration = self.play_number_on_channel(current_channel, item[1], pitch=current_pitch,
+                                                           speed=self.speed, wait=False)
+                    channel_ready[current_channel] = time.monotonic() + (duration or 0)
+                if self.verbose_mode and item_type in ('word', 'number', 'stutter'):
+                    label = ' '.join(item[1]) if item_type == 'number' else item[1]
+                    yield {"text": "[{}/{}] {}".format(word_index, total_words, label), "type": "info"}
 
-            if item[0] == 'word':
-                filepath = os.path.join(AUDIO_BASE_PATH, item[1] + AUDIO_EXTENSION)
-                if not os.path.exists(filepath):
-                    continue
-                with open(filepath, 'rb') as f:
-                    audio = AudioSegment.from_wav(f)
-                pitch = item[2] if len(item) > 2 else current_speed_all
-                if pitch != 1.0:
-                    new_frame_rate = int(audio.frame_rate * pitch)
-                    audio = audio._spawn(audio.raw_data, overrides={'frame_rate': new_frame_rate})
-                    audio = audio.set_frame_rate(audio.frame_rate)
-                if self.speed < 0:
-                    threshold = -35.0
-                    start_trim = detect_leading_silence(audio, silence_threshold=threshold)
-                    end_trim = detect_leading_silence(audio.reverse(), silence_threshold=threshold)
-                    trim_strength = abs(self.speed) / 20.0
-                    start_cut = int(start_trim * trim_strength)
-                    end_cut = int(end_trim * trim_strength)
-                    if start_cut > 0 or end_cut > 0:
-                        audio = audio[start_cut:len(audio)-end_cut]
-                if self.broadcast_effect_enabled:
-                    audio = self.apply_broadcast_effect(audio)
-                channel_audios[current_ch] += audio
+            remaining = max(channel_ready.values(), default=time.monotonic()) - time.monotonic()
+            if remaining > 0:
+                time.sleep(remaining)
 
-            elif item[0] == 'stutter':
-                filepath = os.path.join(AUDIO_BASE_PATH, item[1] + AUDIO_EXTENSION)
-                if not os.path.exists(filepath):
-                    continue
-                with open(filepath, 'rb') as f:
-                    audio = AudioSegment.from_wav(f)
-                pitch = item[3] if len(item) > 3 else current_speed_all
-                if pitch != 1.0:
-                    new_frame_rate = int(audio.frame_rate * pitch)
-                    audio = audio._spawn(audio.raw_data, overrides={'frame_rate': new_frame_rate})
-                    audio = audio.set_frame_rate(audio.frame_rate)
-                if self.speed < 0:
-                    threshold = -35.0
-                    start_trim = detect_leading_silence(audio, silence_threshold=threshold)
-                    end_trim = detect_leading_silence(audio.reverse(), silence_threshold=threshold)
-                    trim_strength = abs(self.speed) / 20.0
-                    start_cut = int(start_trim * trim_strength)
-                    end_cut = int(end_trim * trim_strength)
-                    if start_cut > 0 or end_cut > 0:
-                        audio = audio[start_cut:len(audio)-end_cut]
-                if self.broadcast_effect_enabled:
-                    audio = self.apply_broadcast_effect(audio)
-                stutter_duration_ms = int(self.stutter_duration * 1000)
-                if len(audio) > stutter_duration_ms:
-                    stutter_piece = audio[:stutter_duration_ms]
+            if self.enable_bell and self.enable_special_bell:
+                if not self.wait_for_channels([self.bell_channel], self.get_audio_duration(start_file) + 1 if 'start_file' in locals() else 1):
+                    yield {"text": "[播放警告] 开始铃声等待超时", "type": "error"}
+                if not self.wait_for_channels(range(8)):
+                    yield {"text": "[播放警告] 正文声道等待超时", "type": "error"}
+                end_file = self.get_special_bell_path(self.special_bell_end, 'bell_end.wav')
+                if os.path.exists(end_file):
+                    if self.bell_extra_duration > 0:
+                        time.sleep(self.bell_extra_duration)
+                    self.play_bell_audio(end_file)
+                    self.wait_for_channels([self.bell_channel], self.get_audio_duration(end_file) + 1)
                 else:
-                    stutter_piece = audio
-                for _ in range(item[2]):
-                    channel_audios[current_ch] += stutter_piece
-                channel_audios[current_ch] += audio
-
-            elif item[0] == 'pause':
-                sample_rate = 44100
-                silent = AudioSegment.silent(duration=int(item[1] * 1000), frame_rate=sample_rate)
-                channel_audios[current_ch] += silent
-
-            elif item[0] == 'gap':
-                if item[1] is not None:
-                    sample_rate = 44100
-                    silent = AudioSegment.silent(duration=int(item[1] * 1000), frame_rate=sample_rate)
-                    channel_audios[current_ch] += silent
-
-        if len(channel_audios) == 0:
-            return False, "没有音频数据可导出"
-
-        combined = AudioSegment.empty()
-        for ch, audio in channel_audios.items():
-            if combined is None:
-                combined = audio
+                    yield {"text": "[铃声缺失] {}".format(self.special_bell_end), "type": "error"}
             else:
-                if len(audio) > len(combined):
-                    combined = combined + AudioSegment.silent(duration=(len(audio) - len(combined)), frame_rate=audio.frame_rate)
-                elif len(combined) > len(audio):
-                    audio = audio + AudioSegment.silent(duration=(len(combined) - len(audio)), frame_rate=audio.frame_rate)
-                combined = combined.overlay(audio)
+                self.wait_for_channels(range(pygame.mixer.get_num_channels()))
+            if self.verbose_mode:
+                yield {"text": "播放完成", "type": "info"}
+        except Exception as error:
+            traceback.print_exc()
+            yield {"text": "播放错误: {}".format(error), "type": "error"}
+        finally:
+            self.stop_all_audio()
+            self.is_playing = False
+            self.stop_requested = False
+            if owns_lock:
+                self.play_lock.release()
 
+    def export_from_queue(self, text, output_path, include_bell=False, device=None,
+                          pitch=1.0, speed=-10, enable_number_reading=False,
+                          enable_special_bell=False):
+        if not self.play_lock.acquire(False):
+            return False, "正在播放中，请稍后再试"
+        try:
+            return self._export_from_queue_unlocked(
+                text, output_path, include_bell, device, pitch, speed,
+                enable_number_reading, enable_special_bell)
+        finally:
+            self.play_lock.release()
+
+    def _export_from_queue_unlocked(self, text, output_path, include_bell=False, device=None,
+                                    pitch=1.0, speed=-10, enable_number_reading=False,
+                                    enable_special_bell=False):
+        if not text:
+            return False, "没有音频可导出"
+        parsed = self.parse_broadcast_text(text, enable_number_reading=enable_number_reading)
+        if not parsed['queue']:
+            return False, '; '.join(parsed['errors']) or "没有可导出的音频"
+
+        def load_audio(word, word_pitch):
+            if isinstance(word, (list, tuple)):
+                audio = AudioSegment.empty()
+                for part in word:
+                    filepath = os.path.join(AUDIO_BASE_PATH, part + AUDIO_EXTENSION)
+                    if os.path.exists(filepath):
+                        audio += AudioSegment.from_wav(filepath)
+                if len(audio) == 0:
+                    return None
+            else:
+                filepath = os.path.join(AUDIO_BASE_PATH, word + AUDIO_EXTENSION)
+                if not os.path.exists(filepath):
+                    return None
+                audio = AudioSegment.from_wav(filepath)
+            if word_pitch != 1.0:
+                new_rate = max(1, int(audio.frame_rate * word_pitch))
+                audio = audio._spawn(audio.raw_data, overrides={'frame_rate': new_rate})
+                audio = audio.set_frame_rate(new_rate)
+            if speed < 0:
+                threshold = -35.0
+                start_trim = detect_leading_silence(audio, silence_threshold=threshold)
+                end_trim = detect_leading_silence(audio.reverse(), silence_threshold=threshold)
+                start_cut = int(start_trim * abs(speed) / 20.0)
+                end_cut = int(end_trim * abs(speed) / 20.0)
+                if start_cut + end_cut < len(audio):
+                    audio = audio[start_cut:len(audio) - end_cut]
+            if self.broadcast_effect_enabled:
+                audio = self.apply_broadcast_effect(audio)
+            return audio
+
+        channel_audio = {channel: AudioSegment.empty() for channel in range(8)}
+        channel_positions = {channel: 0 for channel in range(8)}
+        current_channel = self.word_channel
+        current_pitch = pitch
+        word_count = 0
+
+        def append_audio(channel, audio):
+            position = channel_positions[channel]
+            channel_audio[channel] += AudioSegment.silent(duration=max(0, position - len(channel_audio[channel])))
+            channel_audio[channel] += audio
+            channel_positions[channel] = position + len(audio)
+
+        for item in parsed['queue']:
+            item_type = item[0]
+            if item_type == 'channel':
+                current_channel = self.word_channel if item[1] == -1 else item[1]
+            elif item_type == 'speed_all':
+                current_pitch = item[1]
+            elif item_type == 'pause':
+                append_audio(current_channel, AudioSegment.silent(duration=int(item[1] * 1000)))
+            elif item_type == 'gap':
+                append_audio(current_channel, AudioSegment.silent(duration=int(item[1] * 1000)))
+            elif item_type == 'word':
+                word_count += 1
+                if speed > 0 and word_count > 1:
+                    append_audio(current_channel, AudioSegment.silent(duration=int(speed / 20.0 * 1000)))
+                audio = load_audio(item[1], item[2] if len(item) > 2 else current_pitch)
+                if audio is not None:
+                    append_audio(current_channel, audio)
+            elif item_type == 'number':
+                word_count += 1
+                if speed > 0 and word_count > 1:
+                    append_audio(current_channel, AudioSegment.silent(duration=int(speed / 20.0 * 1000)))
+                audio = load_audio(item[1], current_pitch)
+                if audio is not None:
+                    append_audio(current_channel, audio)
+            elif item_type == 'stutter':
+                word_count += 1
+                if speed > 0 and word_count > 1:
+                    append_audio(current_channel, AudioSegment.silent(duration=int(speed / 20.0 * 1000)))
+                audio = load_audio(item[1], item[3] if len(item) > 3 and item[3] is not None else current_pitch)
+                if audio is not None:
+                    short_audio = audio[:int(min(len(audio), self.stutter_duration * 1000))]
+                    append_audio(current_channel, short_audio * item[2])
+                    if len(item) < 5 or item[4]:
+                        append_audio(current_channel, audio)
+            elif item_type == 'alert':
+                template_path = os.path.join(PROJECT_BASE_PATH, 'template_library.json')
+                if os.path.exists(template_path):
+                    try:
+                        with open(template_path, 'r', encoding='utf-8') as template_file:
+                            templates = json.load(template_file).get('templates', [])
+                        template = next((entry for entry in templates if entry.get('id') == item[1]), None)
+                        alert_path = template.get('path') if template else None
+                        if alert_path and os.path.exists(alert_path) and item[2] != 'loop':
+                            alert_channel = self.bell_channel if self.bell_channel < 8 else 0
+                            append_audio(alert_channel, AudioSegment.from_wav(alert_path))
+                    except (OSError, ValueError, TypeError):
+                        pass
+
+        output_audio = AudioSegment.empty()
+        for segment in channel_audio.values():
+            if len(segment) > 0:
+                output_audio = segment if len(output_audio) == 0 else output_audio.overlay(segment)
+        if len(output_audio) == 0:
+            return False, "没有找到可导出的音频"
+
+        content_audio = output_audio
         if include_bell:
-            bell_file = os.path.join(SOUND_BASE_PATH, "bell_start.wav")
-            if os.path.exists(bell_file):
-                with open(bell_file, 'rb') as f:
-                    bell = AudioSegment.from_wav(f)
-                combined = bell.overlay(combined)
-            end_file = os.path.join(SOUND_BASE_PATH, "bell_end.wav")
-            if os.path.exists(end_file):
-                with open(end_file, 'rb') as f:
-                    end_bell = AudioSegment.from_wav(f)
-                combined = combined + end_bell
+            if enable_special_bell:
+                start_file = self.get_special_bell_path(self.special_bell_start, 'bell_start.wav')
+                end_file = self.get_special_bell_path(self.special_bell_end, 'bell_end.wav')
+                if os.path.exists(start_file):
+                    output_audio = AudioSegment.from_wav(start_file) + AudioSegment.silent(duration=int(self.bell_lead_time * 1000)) + content_audio
+                else:
+                    output_audio = AudioSegment.silent(duration=int(self.bell_lead_time * 1000)) + content_audio
+                if self.bell_extra_duration > 0:
+                    output_audio += AudioSegment.silent(duration=int(self.bell_extra_duration * 1000))
+                if os.path.exists(end_file):
+                    output_audio += AudioSegment.from_wav(end_file)
+            else:
+                seconds = max(4, int(len(content_audio) / 1000) + 2 + int(self.bell_extra_duration))
+                bell_file = os.path.join(SOUND_BASE_PATH, 'bg_{}.wav'.format(seconds))
+                if os.path.exists(bell_file):
+                    background = AudioSegment.from_wav(bell_file)
+                    output_audio = background.overlay(content_audio, position=int(self.bell_lead_time * 1000))
 
-        if len(combined) == 0:
-            return False, "没有音频数据可导出"
+        output_audio += AudioSegment.silent(duration=1000)
 
-        output_path_wav = output_path
-        combined.export(output_path_wav, format="wav")
-        return True, output_path_wav
+        try:
+            output_audio.export(output_path, format='wav')
+        except Exception as error:
+            return False, "写入 WAV 文件失败: {}".format(error)
+        return True, output_path
     
     def process_audio_with_pitch(self, filepath, pitch):
         if pitch == 1.0:
@@ -1027,7 +1422,7 @@ def index():
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>C.A.S.S.I.E. 广播生成器</title>
-    <link rel="stylesheet" href="/static/style.css">
+    <link rel="stylesheet" href="/static/style.css?v=20260824-2">
     <style>
 .slider-group {
     display: flex;
@@ -1323,6 +1718,31 @@ input[type="range"]::-webkit-slider-thumb:active {
 .warning-modal {
     animation: modalEnter 0.7s cubic-bezier(0.34, 1.2, 0.64, 1), pulseGlow 2.5s ease-in-out infinite alternate;
 }
+
+:root {
+    --ui-blue: #48a9ff;
+    --ui-cyan: #62d7ff;
+    --ui-line: #233852;
+    --ui-panel: #0b111a;
+}
+
+.slider-group { color: #8fa8c2; }
+.slider-label span { color: #f4f8fc; }
+.slider-value { color: var(--ui-cyan); }
+input[type="range"] { background: #26384d; border-radius: 0; }
+input[type="range"]::-webkit-slider-thumb { background: #dce8f3; border: 1px solid #4d8ac1; border-radius: 2px; box-shadow: none; }
+input[type="range"]::-webkit-slider-thumb:hover { background: #ffffff; }
+.checkbox-custom { background-color: var(--ui-panel); border-color: #3f72a8; border-radius: 2px; }
+.checkbox-label input:checked + .checkbox-custom { background-color: #1b5b91; border-color: var(--ui-cyan); }
+.checkbox-label input:checked + .checkbox-custom::after { border-color: var(--ui-cyan); }
+.modal { background: #101822; border-color: #3f72a8; border-radius: 4px; box-shadow: 0 18px 45px rgba(0, 0, 0, 0.45); }
+.modal h3 { border-left-color: var(--ui-cyan); }
+.modal-close { color: var(--ui-cyan); }
+.modal-buttons button { background-color: #102238; border-color: #3f72a8; border-radius: 2px; color: #f4f8fc; }
+.device-item { background: #0b111a !important; border-color: var(--ui-line) !important; }
+
+@keyframes uiPulse { 0%, 100% { border-color: #233852; } 50% { border-color: #3f72a8; } }
+.options-panel { animation: uiPulse 4s ease-in-out infinite; }
 </style>
 </head>
 <body>
@@ -1332,7 +1752,7 @@ input[type="range"]::-webkit-slider-thumb:active {
             <div class="subtitle">Central Autonomic Service System for Internal Emergencies</div>
         </div>
         <div class="options-panel">
-    <!-- 勾选框保持不变 -->
+
     <label class="checkbox-label">
         <input type="checkbox" id="enableBell">
         <span class="checkbox-custom"></span>
@@ -1354,7 +1774,7 @@ input[type="range"]::-webkit-slider-thumb:active {
         <span>详细输出</span>
     </label>
 
-    <!-- 音高控制 -->
+
     <div class="slider-group">
         <label class="slider-label">
             <span>音高</span>
@@ -1363,7 +1783,6 @@ input[type="range"]::-webkit-slider-thumb:active {
         <input type="range" id="pitchSlider" min="0.1" max="10.0" step="0.05" value="1.0">
     </div>
 
-    <!-- 语速控制 -->
     <div class="slider-group">
         <label class="slider-label">
             <span>语速</span>
@@ -1385,7 +1804,7 @@ input[type="range"]::-webkit-slider-thumb:active {
             <textarea id="broadcastInput" rows="4" placeholder="输入广播内容..."></textarea>
 <div class="button-group">
     <button id="spellCheckBtn" class="spellcheck-button">拼写检查</button>
-    <button disabled id="exportBtn" class="play-button" style="pointer-events: none; opacity: 0.6; cursor: default;">导出WAV</button>
+    <button id="exportBtn" class="play-button">导出WAV</button>
     <button id="playBtn" class="play-button">播放广播</button>
 </div>
         </div>
@@ -1394,12 +1813,29 @@ input[type="range"]::-webkit-slider-thumb:active {
             <div class="volume-indicator" id="volumeIndicator">
                 <div class="volume-fill" id="volumeFill"></div>
             </div>
+            <button id="monitorAudioBtn" class="help-link" type="button">监听系统音频</button>
         </div>
         <div class="bottom-bar">
     <button id="advancedBtn" class="help-link">高级设置</button>
     <button id="presetBtn" class="help-link">预设管理</button>
+    <a href="/word-search" target="_blank" class="help-link">单词查找</a>
     <a href="/help" target="_blank" class="help-link">使用说明</a>
+    <a href="/developer" target="_blank" class="help-link">技术文档</a>
 </div>
+        <div id="deviceModal" class="modal-overlay" style="display:none;">
+    <div class="modal" style="max-width: 500px;">
+        <button id="closeDeviceModal" class="modal-close">&times;</button>
+        <h3>选择音频录制设备</h3>
+        <p style="color: #8e9aaf; font-size: 13px; margin-bottom: 16px;">请选择用于录制系统音频的设备：</p>
+        <div id="deviceList" style="display: flex; flex-direction: column; gap: 8px; margin-bottom: 16px; max-height: 200px; overflow-y: auto;">
+
+        </div>
+        <div style="display: flex; gap: 12px; justify-content: flex-end;">
+            <button id="cancelDeviceSelect" class="btn" style="background: #1a1e26; border: 1px solid #3a4050; border-radius: 40px; padding: 8px 20px; color: #8e9aaf; cursor: pointer;">取消</button>
+            <button id="confirmDeviceSelect" class="btn-primary" style="background: #2f3b5c; border: 1px solid #4a6080; border-radius: 40px; padding: 8px 20px; color: #eef2f5; cursor: pointer;">确认导出</button>
+        </div>
+    </div>
+    </div>
 <div id="advancedModal" class="modal-overlay">
     <div class="modal">
         <button id="closeAdvanced" class="modal-close">&times;</button>
@@ -1413,6 +1849,20 @@ input[type="range"]::-webkit-slider-thumb:active {
             <label style="color: white;">广播铃声额外时长（秒）</label><br>
             <input type="number" id="bellExtraDuration" value="3.0" step="0.1" min="0">
             <span class="hint" style="color: white;">铃声总时长 = 广播总时长 + 此值</span>
+        </div>
+        <div class="param-group">
+            <label style="color: white;">特殊铃声开始文件</label><br>
+            <select id="specialBellStart" style="width: 100%;">
+                <option value="bell_start.wav">bell_start.wav</option>
+                <option value="ic_start.wav">ic_start.wav（单词目录）</option>
+            </select>
+        </div>
+        <div class="param-group">
+            <label style="color: white;">特殊铃声结束文件</label><br>
+            <select id="specialBellEnd" style="width: 100%;">
+                <option value="bell_end.wav">bell_end.wav</option>
+                <option value="ic_stop.wav">ic_stop.wav（单词目录）</option>
+            </select>
         </div>
         <div style="display: flex; flex-direction: column; gap: 20px;">
     <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 4px;">
@@ -1477,9 +1927,9 @@ input[type="range"]::-webkit-slider-thumb:active {
             <span id="reverbLowpassValue" style="color: #79c0ff; font-family: monospace; min-width: 50px;">2000</span>
         </div>
         <div style="display: flex; align-items: center; gap: 16px;">
-            <label style="color: #8e9aaf; font-size: 13px; min-width: 100px;">高音延长</label>
-            <input type="range" id="trebleStretch" min="0" max="20" step="0.5" value="5.0" style="flex: 1; height: 4px; background: #3a4050; border-radius: 2px; outline: none; -webkit-appearance: none;">
-            <span id="trebleStretchValue" style="color: #79c0ff; font-family: monospace; min-width: 50px;">5.0</span>
+            <label style="color: #8e9aaf; font-size: 13px; min-width: 100px;">高音延长 (ms)</label>
+            <input type="range" id="trebleStretch" min="0" max="4000" step="50" value="800" style="flex: 1; height: 4px; background: #3a4050; border-radius: 2px; outline: none; -webkit-appearance: none;">
+            <span id="trebleStretchValue" style="color: #79c0ff; font-family: monospace; min-width: 50px;">800</span>
         </div>
         <div style="display: flex; align-items: center; gap: 16px;">
             <label style="color: #8e9aaf; font-size: 13px; min-width: 100px;">噪音音量 (dB)</label>
@@ -1488,12 +1938,8 @@ input[type="range"]::-webkit-slider-thumb:active {
         </div>
     </div>
 </div>
-        <div style="display: flex; justify-content: flex-end; gap: 12px; margin-top: 18px; padding-top: 14px; border-top: 1px solid #2a2e35;">
-    <button id="saveAdvanced" style="background-color: #2f3b5c; border: 1px solid #4a6080; border-radius: 40px; padding: 8px 28px; color: #eef2f5; font-size: 14px; font-weight: 500; cursor: pointer; transition: background-color 0.08s ease, transform 0.05s linear; font-family: 'Segoe UI', system-ui, sans-serif;">保存</button>
-</div>
     </div>
 </div>
-    </div>
     <div id="presetModal" class="modal-overlay">
         <div class="modal">
             <button id="closeModal" class="modal-close">&times;</button>
@@ -1508,6 +1954,8 @@ input[type="range"]::-webkit-slider-thumb:active {
             </div>
             
         </div>
+
+</div>
     </div>
     <script>
         var enableBell = false;
@@ -1528,6 +1976,7 @@ input[type="range"]::-webkit-slider-thumb:active {
         var terminalContent = document.getElementById('terminalContent');
         var statusText = document.getElementById('statusText');
         var volumeFill = document.getElementById('volumeFill');
+        var monitorAudioBtn = document.getElementById('monitorAudioBtn');
         var presetBtn = document.getElementById('presetBtn');
         var presetModal = document.getElementById('presetModal');
         var closeModal = document.getElementById('closeModal');
@@ -1546,10 +1995,11 @@ input[type="range"]::-webkit-slider-thumb:active {
 var advancedBtn = document.getElementById('advancedBtn');
 var advancedModal = document.getElementById('advancedModal');
 var closeAdvanced = document.getElementById('closeAdvanced');
-var saveAdvanced = document.getElementById('saveAdvanced');
 
 var bellLeadTimeInput = document.getElementById('bellLeadTime');
 var bellExtraDurationInput = document.getElementById('bellExtraDuration');
+var specialBellStartInput = document.getElementById('specialBellStart');
+var specialBellEndInput = document.getElementById('specialBellEnd');
 
 var effectToggle = document.getElementById('broadcastEffectToggle');
 var lowCutFreq = document.getElementById('lowCutFreq');
@@ -1620,6 +2070,15 @@ function updateEffectControls() {
     effectControls.style.pointerEvents = enabled ? 'auto' : 'none';
 }
 
+function settingValue(data, key, fallback) {
+    return data[key] === undefined || data[key] === null ? fallback : data[key];
+}
+
+function numberValue(value, fallback) {
+    var parsed = parseFloat(value);
+    return isFinite(parsed) ? parsed : fallback;
+}
+
 function showWarningModal(message) {
     // 重复检查
     // var key = 'warning_' + message;
@@ -1667,22 +2126,24 @@ advancedBtn.addEventListener('click', function() {
     fetch('/get_advanced_settings')
         .then(function(r) { return r.json(); })
         .then(function(data) {
-            bellLeadTimeInput.value = data.bell_lead_time || 3.0;
-            bellExtraDurationInput.value = data.bell_extra_duration || 3.0;
-            effectToggle.checked = data.broadcast_effect_enabled || false;
-            lowCutFreq.value = data.low_cut_freq || 0;
-            highCutFreq.value = data.high_cut_freq || 0;
-            midBoostGain.value = data.mid_boost_gain || 2.0;
-            overdriveGain.value = data.overdrive_gain || 0.0;
-            clipThreshold.value = data.clip_threshold || 0.0;
-            compressorThreshold.value = data.compressor_threshold || -12.0;
-            compressorRatio.value = data.compressor_ratio || 6.0;
-            reverbDelay.value = data.reverb_delay || 100.0;
-            reverbDecay.value = data.reverb_decay || 3000.0;
-            reverbWet.value = data.reverb_wet || 0.30;
-            reverbLowpass.value = data.reverb_lowpass || 2000;
-            trebleStretch.value = data.treble_stretch || 5.0;
-            noiseVolume.value = data.noise_volume || -35.0;
+            bellLeadTimeInput.value = settingValue(data, 'bell_lead_time', 3.0);
+            bellExtraDurationInput.value = settingValue(data, 'bell_extra_duration', 3.0);
+            specialBellStartInput.value = settingValue(data, 'special_bell_start', 'bell_start.wav');
+            specialBellEndInput.value = settingValue(data, 'special_bell_end', 'bell_end.wav');
+            effectToggle.checked = settingValue(data, 'broadcast_effect_enabled', false);
+            lowCutFreq.value = settingValue(data, 'low_cut_freq', 0);
+            highCutFreq.value = settingValue(data, 'high_cut_freq', 0);
+            midBoostGain.value = settingValue(data, 'mid_boost_gain', 2.0);
+            overdriveGain.value = settingValue(data, 'overdrive_gain', 0.0);
+            clipThreshold.value = settingValue(data, 'clip_threshold', 0.0);
+            compressorThreshold.value = settingValue(data, 'compressor_threshold', -12.0);
+            compressorRatio.value = settingValue(data, 'compressor_ratio', 6.0);
+            reverbDelay.value = settingValue(data, 'reverb_delay', 100.0);
+            reverbDecay.value = settingValue(data, 'reverb_decay', 3000.0);
+            reverbWet.value = settingValue(data, 'reverb_wet', 0.30);
+            reverbLowpass.value = settingValue(data, 'reverb_lowpass', 2000);
+            trebleStretch.value = settingValue(data, 'treble_stretch', 800.0);
+            noiseVolume.value = settingValue(data, 'noise_volume', -35.0);
             syncSliders();
             updateEffectControls();
             advancedModal.classList.add('show');
@@ -1690,6 +2151,8 @@ advancedBtn.addEventListener('click', function() {
         .catch(function() {
             bellLeadTimeInput.value = 3.0;
             bellExtraDurationInput.value = 3.0;
+            specialBellStartInput.value = 'bell_start.wav';
+            specialBellEndInput.value = 'bell_end.wav';
             effectToggle.checked = false;
             lowCutFreq.value = 0;
             highCutFreq.value = 0;
@@ -1702,7 +2165,7 @@ advancedBtn.addEventListener('click', function() {
             reverbDecay.value = 3000.0;
             reverbWet.value = 0.30;
             reverbLowpass.value = 2000;
-            trebleStretch.value = 5.0;
+            trebleStretch.value = 800.0;
             noiseVolume.value = -35.0;
             syncSliders();
             updateEffectControls();
@@ -1710,33 +2173,25 @@ advancedBtn.addEventListener('click', function() {
         });
 });
 
-closeAdvanced.addEventListener('click', function() {
-    advancedModal.classList.remove('show');
-});
-
-advancedModal.addEventListener('click', function(e) {
-    if (e.target === advancedModal) {
-        advancedModal.classList.remove('show');
-    }
-});
-
-saveAdvanced.addEventListener('click', function() {
-    var leadTime = parseFloat(bellLeadTimeInput.value) || 3.0;
-    var extraDuration = parseFloat(bellExtraDurationInput.value) || 3.0;
+function saveAdvancedSettings() {
+    var leadTime = numberValue(bellLeadTimeInput.value, 3.0);
+    var extraDuration = numberValue(bellExtraDurationInput.value, 3.0);
+    var specialStart = specialBellStartInput.value;
+    var specialEnd = specialBellEndInput.value;
     var enabled = effectToggle.checked;
-    var lowCut = parseFloat(lowCutFreq.value) || 0;
-    var highCut = parseFloat(highCutFreq.value) || 0;
-    var midBoost = parseFloat(midBoostGain.value) || 2.0;
-    var overdrive = parseFloat(overdriveGain.value) || 0.0;
-    var clip = parseFloat(clipThreshold.value) || 0.0;
-    var compThresh = parseFloat(compressorThreshold.value) || -12.0;
-    var compRatio = parseFloat(compressorRatio.value) || 6.0;
-    var revDelay = parseFloat(reverbDelay.value) || 100.0;
-    var revDecay = parseFloat(reverbDecay.value) || 3000.0;
-    var revWet = parseFloat(reverbWet.value) || 0.30;
-    var revLow = parseFloat(reverbLowpass.value) || 2000;
-    var treble = parseFloat(trebleStretch.value) || 5.0;
-    var noise = parseFloat(noiseVolume.value) || -35.0;
+    var lowCut = numberValue(lowCutFreq.value, 0);
+    var highCut = numberValue(highCutFreq.value, 0);
+    var midBoost = numberValue(midBoostGain.value, 2.0);
+    var overdrive = numberValue(overdriveGain.value, 0.0);
+    var clip = numberValue(clipThreshold.value, 0.0);
+    var compThresh = numberValue(compressorThreshold.value, -12.0);
+    var compRatio = numberValue(compressorRatio.value, 6.0);
+    var revDelay = numberValue(reverbDelay.value, 100.0);
+    var revDecay = numberValue(reverbDecay.value, 3000.0);
+    var revWet = numberValue(reverbWet.value, 0.30);
+    var revLow = numberValue(reverbLowpass.value, 2000);
+    var treble = numberValue(trebleStretch.value, 800.0);
+    var noise = numberValue(noiseVolume.value, -35.0);
 
     fetch('/save_advanced_settings', {
         method: 'POST',
@@ -1744,6 +2199,8 @@ saveAdvanced.addEventListener('click', function() {
         body: JSON.stringify({
             bell_lead_time: leadTime,
             bell_extra_duration: extraDuration,
+            special_bell_start: specialStart,
+            special_bell_end: specialEnd,
             broadcast_effect_enabled: enabled,
             low_cut_freq: lowCut,
             high_cut_freq: highCut,
@@ -1773,6 +2230,18 @@ saveAdvanced.addEventListener('click', function() {
     .catch(function(err) {
         addTerminalLine('保存失败: ' + err, 'error');
     });
+}
+
+closeAdvanced.addEventListener('click', function() {
+    saveAdvancedSettings();
+    advancedModal.classList.remove('show');
+});
+
+advancedModal.addEventListener('click', function(e) {
+    if (e.target === advancedModal) {
+        saveAdvancedSettings();
+        advancedModal.classList.remove('show');
+    }
 });
 
 
@@ -1842,61 +2311,6 @@ saveAdvanced.addEventListener('click', function() {
         });
 
         var currentEventSource = null;
-        function playBroadcast() {
-            var text = broadcastInput.value.trim();
-            if (!text) {
-                addTerminalLine('请输入广播内容', 'error');
-                return;
-            }
-            if (currentEventSource) {
-                currentEventSource.close();
-                currentEventSource = null;
-            }
-            statusText.textContent = '播放中';
-            if (verboseMode) {
-                terminalContent.innerHTML = '';
-            }
-            fetch('/play', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    text: text,
-                    enable_bell: enableBell,
-                    enable_special_bell: enableSpecialBell,
-                    enable_number_reading: enableNumberReading,
-                    verbose_mode: verboseMode
-                })
-            }).then(function(response) {
-                var reader = response.body.getReader();
-                var decoder = new TextDecoder();
-                function readStream() {
-                    reader.read().then(function(result) {
-                        if (result.done) {
-                            statusText.textContent = '等待播放';
-                            return;
-                        }
-                        var chunk = decoder.decode(result.value);
-                        var lines = chunk.split('\\n');
-                        for (var i = 0; i < lines.length; i++) {
-                            if (lines[i].startsWith('data: ')) {
-                                var data = JSON.parse(lines[i].substring(6));
-                                if (data.type === 'end') {
-                                    statusText.textContent = '等待播放';
-                                    return;
-                                }
-                                addTerminalLine(data.text, data.type);
-                            }
-                        }
-                        readStream();
-                    });
-                }
-                readStream();
-            }).catch(function(err) {
-                addTerminalLine('播放失败: ' + err, 'error');
-                statusText.textContent = '等待播放';
-            });
-        }
-        playBtn.addEventListener('click', playBroadcast);
 
         function loadPresets() {
             fetch('/get_presets').then(function(res) { return res.json(); }).then(function(data) {
@@ -1922,7 +2336,6 @@ saveAdvanced.addEventListener('click', function() {
         var content = presets[name];
         var tr = document.createElement('tr');
         tr.style.borderBottom = '1px solid #232830';
-        // 勾选框单元格
         var tdCheckbox = document.createElement('td');
         tdCheckbox.style.width = '30px';
         tdCheckbox.style.padding = '8px 0';
@@ -1940,7 +2353,6 @@ saveAdvanced.addEventListener('click', function() {
             }
         });
         tdCheckbox.appendChild(checkbox);
-        // 预设名称单元格
         var tdName = document.createElement('td');
         tdName.style.padding = '8px 12px';
         tdName.style.color = '#eef2f5';
@@ -1953,7 +2365,7 @@ saveAdvanced.addEventListener('click', function() {
                 presetModal.classList.remove('show');
             };
         })(name));
-        // 预览内容单元格
+
         var tdPreview = document.createElement('td');
         tdPreview.style.padding = '8px 0';
         tdPreview.style.color = '#5c6e8c';
@@ -1963,7 +2375,6 @@ saveAdvanced.addEventListener('click', function() {
         tdPreview.style.maxWidth = '300px';
         var preview = content.length > 50 ? content.substring(0, 50) + '...' : content;
         tdPreview.textContent = preview;
-        // 删除按钮单元格
         var tdDelete = document.createElement('td');
         tdDelete.style.width = '30px';
         tdDelete.style.padding = '8px 0';
@@ -2055,49 +2466,190 @@ saveAdvanced.addEventListener('click', function() {
             playBroadcast();
         });
 
-        var exportBtn = document.getElementById('exportBtn');
+var selectedDeviceId = 'default';
+var selectedDeviceLabel = '默认设备';
+var modalOpened = false;
+
+function getAudioDevices() {
+    var devices = [];
+    if (navigator.mediaDevices && navigator.mediaDevices.enumerateDevices) {
+        return navigator.mediaDevices.enumerateDevices()
+            .then(function(deviceInfos) {
+                for (var i = 0; i < deviceInfos.length; i++) {
+                    var device = deviceInfos[i];
+                    if (device.kind === 'audioinput') {
+                        devices.push({
+                            label: device.label || '未知设备 ' + (i + 1),
+                            deviceId: device.deviceId,
+                            groupId: device.groupId
+                        });
+                    }
+                }
+                if (devices.length === 0) {
+                    devices.push({ label: '默认输入设备', deviceId: 'default' });
+                }
+                return devices;
+            });
+    } else {
+        return Promise.resolve([{ label: '默认设备', deviceId: 'default' }]);
+    }
+}
+
+function closeDeviceModal() {
+    var modal = document.getElementById('deviceModal');
+    modal.style.display = 'none';
+    modalOpened = false;
+}
+
+function requestExport(deviceName) {
+    var text = broadcastInput.value.trim();
+    statusText.textContent = '导出中';
+    fetch('/export', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            text: text,
+            device: deviceName || '',
+            enable_bell: enableBell,
+            enable_special_bell: enableSpecialBell,
+            enable_number_reading: enableNumberReading,
+            pitch: parseFloat(pitchSlider.value),
+            speed: parseInt(speedSlider.value, 10)
+        })
+    }).then(function(res) {
+        var contentType = res.headers.get('Content-Type') || '';
+        if (contentType.indexOf('audio/wav') === 0) {
+            return res.blob();
+        }
+        return res.json().then(function(data) {
+            throw new Error(data.message || '导出失败');
+        });
+    }).then(function(blob) {
+        var url = URL.createObjectURL(blob);
+        var link = document.createElement('a');
+        link.href = url;
+        link.download = 'broadcast.wav';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+        addTerminalLine('导出成功: broadcast.wav', 'normal');
+        statusText.textContent = '等待播放';
+    }).catch(function(err) {
+        addTerminalLine('导出失败: ' + err.message, 'error');
+        statusText.textContent = '等待播放';
+    });
+}
+
+function openDeviceModal(callback) {
+    if (modalOpened) return;
+    modalOpened = true;
+
+    var modal = document.getElementById('deviceModal');
+    var deviceList = document.getElementById('deviceList');
+    var closeBtn = document.getElementById('closeDeviceModal');
+    var cancelBtn = document.getElementById('cancelDeviceSelect');
+    var confirmBtn = document.getElementById('confirmDeviceSelect');
+
+    selectedDeviceId = 'default';
+    selectedDeviceLabel = '默认设备';
+
+    var newConfirmBtn = confirmBtn.cloneNode(true);
+    var newCloseBtn = closeBtn.cloneNode(true);
+    var newCancelBtn = cancelBtn.cloneNode(true);
+    confirmBtn.parentNode.replaceChild(newConfirmBtn, confirmBtn);
+    closeBtn.parentNode.replaceChild(newCloseBtn, closeBtn);
+    cancelBtn.parentNode.replaceChild(newCancelBtn, cancelBtn);
+
+    var finalConfirmBtn = document.getElementById('confirmDeviceSelect');
+    var finalCloseBtn = document.getElementById('closeDeviceModal');
+    var finalCancelBtn = document.getElementById('cancelDeviceSelect');
+
+    deviceList.innerHTML = '<div style="color: #5c6e8c; padding: 12px; text-align: center;">正在加载设备...</div>';
+    modal.style.display = 'flex';
+
+    getAudioDevices().then(function(devices) {
+        deviceList.innerHTML = '';
+        var defaultDiv = document.createElement('div');
+        defaultDiv.className = 'device-item';
+        defaultDiv.style.cssText = 'display: flex; align-items: center; gap: 12px; padding: 10px 14px; background: #0f1219; border: 1px solid #2a2e35; border-radius: 8px; cursor: pointer; transition: background 0.15s ease;';
+        defaultDiv.innerHTML = '<input type="radio" name="device" value="default" checked style="width: 16px; height: 16px; accent-color: #4a8fc0;"> <span style="color: #eef2f5;">默认设备</span> <span style="color: #5c6e8c; font-size: 11px; margin-left: auto;">系统默认</span>';
+        defaultDiv.addEventListener('click', function(e) {
+            var radio = this.querySelector('input[type="radio"]');
+            radio.checked = true;
+            selectedDeviceId = 'default';
+            selectedDeviceLabel = '默认设备';
+            e.stopPropagation();
+        });
+        deviceList.appendChild(defaultDiv);
+
+        for (var i = 0; i < devices.length; i++) {
+            var div = document.createElement('div');
+            div.className = 'device-item';
+            div.style.cssText = 'display: flex; align-items: center; gap: 12px; padding: 10px 14px; background: #0f1219; border: 1px solid #2a2e35; border-radius: 8px; cursor: pointer; transition: background 0.15s ease;';
+            var label = devices[i].label;
+            var isLoopback = label.toLowerCase().includes('stereo mix') ||
+                            label.toLowerCase().includes('立体声混音') ||
+                            label.toLowerCase().includes('blackhole') ||
+                            label.toLowerCase().includes('loopback');
+            var tag = isLoopback ? ' <span style="color: #67c23a; font-size: 11px;">内录推荐</span>' : '';
+            div.innerHTML = '<input type="radio" name="device" value="' + devices[i].deviceId + '" style="width: 16px; height: 16px; accent-color: #4a8fc0;"> <span style="color: #eef2f5;">' + label + '</span>' + tag;
+            div.addEventListener('click', function(e) {
+                var radio = this.querySelector('input[type="radio"]');
+                radio.checked = true;
+                selectedDeviceId = radio.value;
+                selectedDeviceLabel = this.querySelector('span').textContent.trim();
+                e.stopPropagation();
+            });
+            deviceList.appendChild(div);
+        }
+    }).catch(function() {
+        deviceList.innerHTML = '<div style="color: #ff7b72; padding: 12px; text-align: center;">无法获取设备列表，请手动输入设备名称</div>';
+        var input = document.createElement('input');
+        input.type = 'text';
+        input.placeholder = '请输入设备名称（如 Stereo Mix）';
+        input.style.cssText = 'width: 100%; padding: 8px 12px; background: #0a0c10; border: 1px solid #2a2e35; border-radius: 6px; color: #e2e8f2; margin-top: 8px;';
+        input.addEventListener('input', function() {
+            selectedDeviceLabel = this.value;
+            selectedDeviceId = this.value;
+        });
+        deviceList.appendChild(input);
+    });
+
+    finalCloseBtn.addEventListener('click', closeDeviceModal);
+    finalCancelBtn.addEventListener('click', closeDeviceModal);
+    modal.addEventListener('click', function(e) {
+        if (e.target === modal) {
+            closeDeviceModal();
+        }
+    });
+
+    finalConfirmBtn.addEventListener('click', function() {
+        closeDeviceModal();
+        requestExport(selectedDeviceLabel || '');
+    });
+}
+
 exportBtn.addEventListener('click', function() {
     var text = broadcastInput.value.trim();
     if (!text) {
         addTerminalLine('请输入广播内容', 'error');
         return;
     }
-    statusText.textContent = '导出中';
-    fetch('/export', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ text: text })
-}).then(function(res) {
-    return res.blob();
-}).then(function(blob) {
-    var url = URL.createObjectURL(blob);
-    var a = document.createElement('a');
-    a.href = url;
-    a.download = 'broadcast.wav';
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-    addTerminalLine('导出成功: broadcast.wav', 'normal');
-    statusText.textContent = '等待播放';
-}).catch(function(err) {
-    addTerminalLine('导出失败: ' + err.message, 'error');
-    statusText.textContent = '等待播放';
+    requestExport('');
 });
-});
-// 获取滑块元素
 var pitchSlider = document.getElementById('pitchSlider');
 var speedSlider = document.getElementById('speedSlider');
 var pitchValue = document.getElementById('pitchValue');
 var speedValue = document.getElementById('speedValue');
 
-// 音高滑块事件
+
 pitchSlider.addEventListener('input', function() {
     var val = parseFloat(this.value).toFixed(2);
     pitchValue.textContent = val;
 });
 
-// 语速滑块事件
+
 speedSlider.addEventListener('input', function() {
     var val = parseInt(this.value, 10);
     speedValue.textContent = val;
@@ -2115,10 +2667,9 @@ speedSlider.addEventListener('input', function() {
     }
     speedValue.style.color = color;
 });
-// 初始化语速颜色
 speedSlider.dispatchEvent(new Event('input'));
 
-// 修改 playBroadcast 函数中的 fetch 请求，增加 pitch 和 speed 参数
+
 function playBroadcast() {
     var text = broadcastInput.value.trim();
     if (!text) {
@@ -2177,34 +2728,86 @@ function playBroadcast() {
         statusText.textContent = '等待播放';
     });
 }
+playBtn.addEventListener('click', playBroadcast);
 
-        function updateVolume() {
-            if (navigator.getUserMedia) {
-                navigator.getUserMedia({ audio: true }, function(stream) {
-                    var audioContext = new (window.AudioContext || window.webkitAudioContext)();
-                    var source = audioContext.createMediaStreamSource(stream);
-                    var analyser = audioContext.createAnalyser();
-                    analyser.fftSize = 256;
-                    source.connect(analyser);
-                    var dataArray = new Uint8Array(analyser.frequencyBinCount);
-                    function getVolume() {
-                        analyser.getByteFrequencyData(dataArray);
-                        var sum = 0;
-                        for (var i = 0; i < dataArray.length; i++) {
-                            sum += dataArray[i];
-                        }
-                        var avg = sum / dataArray.length;
-                        var percent = Math.min(100, (avg / 255) * 100);
-                        volumeFill.style.width = percent + '%';
-                        requestAnimationFrame(getVolume);
-                    }
-                    getVolume();
-                }, function(err) {
-                    console.log('麦克风权限未授予');
-                });
+        var systemAudioStream = null;
+        var volumeAnimation = null;
+        var audioContext = null;
+
+        function stopAudioMonitor() {
+            if (volumeAnimation) {
+                cancelAnimationFrame(volumeAnimation);
+                volumeAnimation = null;
             }
+            if (systemAudioStream) {
+                systemAudioStream.getTracks().forEach(function(track) { track.stop(); });
+                systemAudioStream = null;
+            }
+            if (audioContext) {
+                audioContext.close();
+                audioContext = null;
+            }
+            volumeFill.style.width = '0%';
         }
-        updateVolume();
+
+        function startAudioMonitor() {
+            if (!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia) {
+                addTerminalLine('当前浏览器不支持系统音频监听', 'error');
+                return;
+            }
+            stopAudioMonitor();
+            navigator.mediaDevices.getDisplayMedia({ video: true, audio: true }).then(function(stream) {
+                systemAudioStream = stream;
+                stream.getVideoTracks().forEach(function(track) { track.stop(); });
+                if (stream.getAudioTracks().length === 0) {
+                    stopAudioMonitor();
+                    addTerminalLine('未共享系统音频，请在共享窗口中勾选音频', 'error');
+                    return;
+                }
+                audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                var source = audioContext.createMediaStreamSource(stream);
+                var analyser = audioContext.createAnalyser();
+                analyser.fftSize = 1024;
+                source.connect(analyser);
+                var dataArray = new Uint8Array(analyser.fftSize);
+                var displayed = 0;
+                function getVolume() {
+                    analyser.getByteTimeDomainData(dataArray);
+                    var sum = 0;
+                    for (var i = 0; i < dataArray.length; i++) {
+                        var sample = (dataArray[i] - 128) / 128;
+                        sum += sample * sample;
+                    }
+                    var rms = Math.sqrt(sum / dataArray.length);
+                    var target = Math.min(100, Math.max(0, rms * 260));
+                    displayed += (target - displayed) * (target > displayed ? 0.45 : 0.2);
+                    volumeFill.style.width = displayed.toFixed(1) + '%';
+                    volumeAnimation = requestAnimationFrame(getVolume);
+                }
+                getVolume();
+                stream.getTracks().forEach(function(track) {
+                    track.addEventListener('ended', function() {
+                        stopAudioMonitor();
+                        monitorAudioBtn.textContent = '监听系统音频';
+                    }, { once: true });
+                });
+                monitorAudioBtn.textContent = '停止监听';
+            }).catch(function(error) {
+                if (error.name !== 'AbortError' && error.name !== 'NotAllowedError') {
+                    addTerminalLine('系统音频监听失败: ' + error.message, 'error');
+                }
+            });
+        }
+
+        monitorAudioBtn.addEventListener('click', function() {
+            if (systemAudioStream) {
+                stopAudioMonitor();
+                monitorAudioBtn.textContent = '监听系统音频';
+            } else {
+                startAudioMonitor();
+            }
+        });
+        window.addEventListener('load', startAudioMonitor);
     </script>
 </body>
 </html>
@@ -2212,11 +2815,19 @@ function playBroadcast() {
 
 @route('/static/<filepath:path>')
 def serve_static(filepath):
-    return static_file(filepath, root='static')
+    return static_file(filepath, root=PROJECT_BASE_PATH + os.sep + 'static')
 
 @route('/help')
 def help_page():
-    return static_file('help.html', root='.')
+    return static_file('help.html', root=os.path.join(PROJECT_BASE_PATH, 'docs'))
+
+@route('/developer')
+def developer_page():
+    return static_file('developer.html', root=os.path.join(PROJECT_BASE_PATH, 'docs'))
+
+@route('/word-search')
+def word_search_page():
+    return static_file('index.html', root=os.path.join(PROJECT_BASE_PATH, 'tools', 'word_search'))
 
 @route('/check_spelling', method='POST')
 def check_spelling():
@@ -2232,27 +2843,6 @@ def check_spelling_display():
     text = data.get('text', '')
     not_found = cassie.check_spelling(text)
     return {'text': text, 'not_found': not_found}
-
-@route('/play', method='POST')
-def play():
-    response.content_type = 'text/event-stream'
-    response.set_header('Cache-Control', 'no-cache')
-    response.set_header('Access-Control-Allow-Origin', '*')
-    
-    body = request.body.read().decode('utf-8')
-    data = json.loads(body)
-    
-    cassie.enable_bell = data.get('enable_bell', False)
-    cassie.enable_special_bell = data.get('enable_special_bell', False)
-    cassie.enable_number_reading = data.get('enable_number_reading', False)
-    cassie.verbose_mode = data.get('verbose_mode', False)
-    
-    def generate():
-        for log in cassie.play_broadcast_stream(data.get('text', '')):
-            yield f"data: {json.dumps(log)}\n\n"
-        yield "data: {\"type\": \"end\"}\n\n"
-    
-    return generate()
 
 @route('/get_presets', method='GET')
 def get_presets():
@@ -2293,6 +2883,10 @@ def play():
         
         body = request.body.read().decode('utf-8')
         data = json.loads(body)
+
+        if not cassie.play_lock.acquire(False):
+            yield_data = {"error": "正在播放或导出中，请稍后再试"}
+            return yield_data
         
         cassie.enable_bell = data.get('enable_bell', False)
         cassie.enable_special_bell = data.get('enable_special_bell', False)
@@ -2303,7 +2897,7 @@ def play():
         
         def generate():
             try:
-                for log in cassie.play_broadcast_stream(data.get('text', '')):
+                for log in cassie.play_broadcast_stream(data.get('text', ''), lock_acquired=True):
                     yield f"data: {json.dumps(log)}\n\n"
                 yield "data: {\"type\": \"end\"}\n\n"
             except Exception as e:
@@ -2322,70 +2916,43 @@ def export_wav():
     body = request.body.read().decode('utf-8')
     data = json.loads(body)
     text = data.get('text', '')
+    device_name = data.get('device', '')
 
     if not text:
         return {'success': False, 'message': '内容不能为空'}
-
-    gap_value = None
-    error_value = None
-
-    gap_match = re.search(r'\[gap:([^\]]+)\]', text)
-    if gap_match:
-        gap_raw = gap_match.group(1).strip()
-        if gap_raw == 'none':
-            gap_value = None
-        else:
-            try:
-                gap_value = float(gap_raw)
-            except:
-                gap_value = None
-        text = re.sub(r'\[gap:[^\]]+\]', '', text)
-
-    error_match = re.search(r'\[error:(\d+)\]', text)
-    if error_match:
-        error_value = int(error_match.group(1))
-        text = re.sub(r'\[error:\d+\]', '', text)
-
-    text = re.sub(r'\s+', ' ', text).strip()
-    segments = text.lower().split()
-
-    full_queue = []
-    i = 0
-    while i < len(segments):
-        parsed = cassie.parse_segment(segments, i)
-        if parsed:
-            full_queue.extend(parsed)
-            i += 1
-        else:
-            i += 1
-
-    if error_value and error_value > 0:
-        word_indices = [i for i, item in enumerate(full_queue) if item[0] == 'word']
-        if word_indices:
-            select_count = min(error_value, len(word_indices))
-            chosen = random.sample(word_indices, select_count)
-            for pos in sorted(chosen, reverse=True):
-                orig = full_queue[pos][1]
-                if random.choice([0, 1]) == 0:
-                    full_queue.insert(pos, ('word', f'g{random.randint(1,9)}'))
-                else:
-                    full_queue[pos] = ('stutter', orig, random.randint(1,4))
-
-    if not full_queue:
-        return {'success': False, 'message': '没有可导出的音频'}
 
     temp_file = tempfile.NamedTemporaryFile(suffix='.wav', delete=False)
     temp_path = temp_file.name
     temp_file.close()
 
     try:
-        success, result = cassie.export_from_queue(full_queue, temp_path, include_bell=cassie.enable_bell)
+
+        success, result = cassie.export_from_queue(
+            text=text,
+            output_path=temp_path,
+            include_bell=data.get('enable_bell', cassie.enable_bell),
+            device=device_name,
+            pitch=data.get('pitch', cassie.pitch),
+            speed=data.get('speed', cassie.speed),
+            enable_number_reading=data.get('enable_number_reading', cassie.enable_number_reading),
+            enable_special_bell=data.get('enable_special_bell', cassie.enable_special_bell)
+        )
         if success:
-            return static_file(os.path.basename(result), root=os.path.dirname(result), download='broadcast.mp3')
+            with open(result, 'rb') as exported_file:
+                response.content_type = 'audio/wav'
+                response.set_header('Content-Disposition', 'attachment; filename="broadcast.wav"')
+                content = exported_file.read()
+            os.unlink(result)
+            return content
         else:
+            if os.path.exists(temp_path):
+                os.unlink(temp_path)
             return {'success': False, 'message': result}
     except Exception as e:
+
         traceback.print_exc()
+        if os.path.exists(temp_path):
+            os.unlink(temp_path)
         return {'success': False, 'message': str(e)}
 
 
@@ -2395,6 +2962,8 @@ def get_advanced_settings():
     return {
         'bell_lead_time': cassie.bell_lead_time,
         'bell_extra_duration': cassie.bell_extra_duration,
+        'special_bell_start': cassie.special_bell_start,
+        'special_bell_end': cassie.special_bell_end,
         'broadcast_effect_enabled': cassie.broadcast_effect_enabled,
         'low_cut_freq': cassie.low_cut_freq,
         'high_cut_freq': cassie.high_cut_freq,
@@ -2418,6 +2987,8 @@ def save_advanced_settings():
     data = json.loads(body)
     cassie.bell_lead_time = data.get('bell_lead_time', 3.0)
     cassie.bell_extra_duration = data.get('bell_extra_duration', 3.0)
+    cassie.special_bell_start = data.get('special_bell_start', 'bell_start.wav')
+    cassie.special_bell_end = data.get('special_bell_end', 'bell_end.wav')
     cassie.broadcast_effect_enabled = data.get('broadcast_effect_enabled', False)
     cassie.low_cut_freq = data.get('low_cut_freq', 0)
     cassie.high_cut_freq = data.get('high_cut_freq', 0)
@@ -2430,7 +3001,7 @@ def save_advanced_settings():
     cassie.reverb_decay = data.get('reverb_decay', 3000.0)
     cassie.reverb_wet = data.get('reverb_wet', 0.30)
     cassie.reverb_lowpass = data.get('reverb_lowpass', 2000)
-    cassie.treble_stretch = data.get('treble_stretch', 5.0)
+    cassie.treble_stretch = data.get('treble_stretch', 800.0)
     cassie.noise_volume = data.get('noise_volume', -35.0)
     cassie.noise_type = data.get('noise_type', 'pink')
     return {'success': True}

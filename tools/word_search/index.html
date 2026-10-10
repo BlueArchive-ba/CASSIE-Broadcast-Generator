@@ -318,7 +318,7 @@
         <div class="output-area" style="margin-top: 20px;">
             <label>特殊音频文件</label>
             <div id="specialOutput" class="output-box" style="min-height: 80px; max-height: 200px;">
-                <span style="color: #5c6e8c;">点击检测后显示...</span>
+                <span style="color: #5c6e8c;">点击「特殊文件列表」查看</span>
             </div>
         </div>
 
@@ -331,17 +331,20 @@
 
     <script>
         let wordList = [];
-let wordSet = new Set();
+        let wordSet = new Set();
 
-function loadWordList() {
-    const data = [
+        function loadWordList() {
+            const data = [
   "-ish",
   "-like",
   "0",
   "1",
   "10",
+  "100s",
   "11",
+  "110s",
   "12",
+  "120s",
   "13",
   "14",
   "15",
@@ -353,18 +356,25 @@ function loadWordList() {
   "20",
   "3",
   "30",
+  "30s",
   "4",
   "40",
+  "40s",
   "5",
   "50",
+  "50s",
   "6",
   "60",
+  "60s",
   "7",
   "70",
+  "70s",
   "8",
   "80",
+  "80s",
   "9",
   "90",
+  "90s",
   "_a",
   "_b",
   "_c",
@@ -485,6 +495,7 @@ function loadWordList() {
   "beta",
   "between",
   "big",
+  "big door open1",
   "billiard",
   "biological",
   "black",
@@ -578,6 +589,7 @@ function loadWordList() {
   "deactivate",
   "deactivated",
   "dead",
+  "dead man",
   "deca",
   "december",
   "deci",
@@ -585,6 +597,7 @@ function loadWordList() {
   "decontamination",
   "decrease",
   "defence",
+  "defense module updated",
   "degrees",
   "delta",
   "denied",
@@ -635,6 +648,7 @@ function loadWordList() {
   "electromagnetism",
   "elevator",
   "elevator #125529",
+  "elevator door open",
   "elevators",
   "emergency",
   "empty",
@@ -696,6 +710,7 @@ function loadWordList() {
   "femur",
   "few",
   "field",
+  "final flash of existence orchestral version scp secret laboratory ost",
   "find",
   "fine",
   "finished",
@@ -766,6 +781,7 @@ function loadWordList() {
   "heavy",
   "hecto",
   "helicopter",
+  "helicopter_1",
   "hello",
   "help",
   "her",
@@ -778,6 +794,8 @@ function loadWordList() {
   "human",
   "hundred",
   "i",
+  "ic_start",
+  "ic_stop",
   "identification",
   "identify",
   "if",
@@ -839,6 +857,7 @@ function loadWordList() {
   "left",
   "less",
   "lethal",
+  "lethal force authorized",
   "letter",
   "level",
   "lieutenant",
@@ -878,6 +897,7 @@ function loadWordList() {
   "mega",
   "memory",
   "men",
+  "menu Intense",
   "message",
   "meter",
   "meters",
@@ -993,6 +1013,7 @@ function loadWordList() {
   "please",
   "plus",
   "pocket",
+  "point",
   "positive",
   "possible",
   "post-",
@@ -1182,6 +1203,7 @@ function loadWordList() {
   "thank",
   "thanks",
   "that",
+  "the chaos insurgency announce",
   "the_consonant",
   "the_vowel",
   "their",
@@ -1248,6 +1270,9 @@ function loadWordList() {
   "wall",
   "want",
   "warhead",
+  "warhead cancelled",
+  "warhead resume",
+  "warhead start",
   "warheadcrank",
   "warn",
   "warning",
@@ -1282,6 +1307,11 @@ function loadWordList() {
   "would",
   "wrong",
   "x",
+  "xmas bouncyballs",
+  "xmas epsilon11",
+  "xmas hasentered",
+  "xmas jinglebells",
+  "xmas scpsubjects",
   "y",
   "year",
   "yellow",
@@ -1294,190 +1324,210 @@ function loadWordList() {
   "zeta",
   "zone"
 ];
-    wordList = data;
-    wordSet = new Set(data);
-    document.getElementById('wordCount').textContent = data.length;
-    document.getElementById('loadedCount').textContent = data.length;
-    document.getElementById('statusText').textContent = '就绪';
-}
+            wordList = data;
+            wordSet = new Set(data);
+            document.getElementById('wordCount').textContent = data.length;
+            document.getElementById('loadedCount').textContent = data.length;
+            document.getElementById('statusText').textContent = '就绪';
+        }
 
-const NATO_MAP = {
-    'alpha': 'a', 'bravo': 'b', 'charlie': 'c', 'delta': 'd',
-    'echo': 'e', 'foxtrot': 'f', 'golf': 'g', 'hotel': 'h',
-    'india': 'i', 'juliett': 'j', 'kilo': 'k', 'lima': 'l',
-    'mike': 'm', 'november': 'n', 'oscar': 'o', 'papa': 'p',
-    'quebec': 'q', 'romeo': 'r', 'sierra': 's', 'tango': 't',
-    'uniform': 'u', 'victor': 'v', 'whiskey': 'w', 'xray': 'x',
-    'yankee': 'y', 'zulu': 'z'
-};
+        const NATO_MAP = {
+            'alpha': 'a', 'bravo': 'b', 'charlie': 'c', 'delta': 'd',
+            'echo': 'e', 'foxtrot': 'f', 'golf': 'g', 'hotel': 'h',
+            'india': 'i', 'juliett': 'j', 'kilo': 'k', 'lima': 'l',
+            'mike': 'm', 'november': 'n', 'oscar': 'o', 'papa': 'p',
+            'quebec': 'q', 'romeo': 'r', 'sierra': 's', 'tango': 't',
+            'uniform': 'u', 'victor': 'v', 'whiskey': 'w', 'xray': 'x',
+            'yankee': 'y', 'zulu': 'z'
+        };
 
-function checkWord(word) {
-    if (['.', ',', '、'].includes(word)) {
-        return { found: true, type: 'punctuation', display: word + ' (标点)' };
-    }
-    if (word === 'mtf') {
-        return { found: true, type: 'mtf', display: 'mtf → mobile task force' };
-    }
-    if (/^g[1-9]$/.test(word)) {
-        return { found: true, type: 'glitch', display: word + ' (故障音效)' };
-    }
-    if (word.includes('+')) {
-    const phrase = word.replace(/\+/g, ' ');
-    if (wordSet.has(phrase)) {
-        return { found: true, type: 'phrase', display: word + ' → ' + phrase };
-    }
-    return { found: false, type: 'phrase_missing', display: word + ' (短语未找到)' };
-}
-    if (wordSet.has(word)) {
-        return { found: true, type: 'exact', display: word };
-    }
-    if (word in NATO_MAP) {
-        const mapped = NATO_MAP[word];
-        if (wordSet.has(mapped)) {
-            return { found: true, type: 'nato', display: word + ' → ' + mapped };
-        }
-    }
-    if (/^[a-z]$/.test(word)) {
-        const prefixed = '_' + word;
-        if (wordSet.has(prefixed)) {
-            return { found: true, type: 'letter', display: word + ' → ' + prefixed };
-        }
-    }
-    if (word.endsWith('ted')) {
-        const stem = word.slice(0, -3);
-        if (wordSet.has(stem) && wordSet.has('t-ed')) {
-            return { found: true, type: 't_ed', display: word + ' → ' + stem + ' + t-ed' };
-        }
-        if (wordSet.has(stem) && wordSet.has('t') && wordSet.has('ed')) {
-            return { found: true, type: 't_ed_split', display: word + ' → ' + stem + ' + t + ed' };
-        }
-    }
-    if (word.endsWith('ed')) {
-        const stem = word.slice(0, -2);
-        if (wordSet.has(stem) && wordSet.has('-ed')) {
-            return { found: true, type: 'ed', display: word + ' → ' + stem + ' + -ed' };
-        }
-    }
-    if (word.endsWith('ish')) {
-        const stem = word.slice(0, -3);
-        if (wordSet.has(stem) && wordSet.has('-ish')) {
-            return { found: true, type: 'ish', display: word + ' → ' + stem + ' + -ish' };
-        }
-    }
-    if (word.endsWith('like')) {
-        const stem = word.slice(0, -4);
-        if (wordSet.has(stem) && wordSet.has('-like')) {
-            return { found: true, type: 'like', display: word + ' → ' + stem + ' + -like' };
-        }
-    }
-    const prefixes = ['anti', 'post', 'pre', 'pro', 'un'];
-    for (const pref of prefixes) {
-        if (word.startsWith(pref) && word.length > pref.length) {
-            const stem = word.slice(pref.length);
-            const prefFile = pref + '-';
-            if (wordSet.has(prefFile) && wordSet.has(stem)) {
-                return { found: true, type: 'prefix', display: word + ' → ' + prefFile + ' + ' + stem };
+        function checkWord(word) {
+            if (['.', ',', '、'].includes(word)) {
+                return { found: true, type: 'punctuation', display: word + ' (标点)' };
             }
-        }
-    }
-    return { found: false, type: 'missing', display: word };
-}
-
-function checkText(text) {
-    const segments = text.trim().split(/\s+/);
-    const results = [];
-    let foundCount = 0;
-    let missingCount = 0;
-    for (const seg of segments) {
-        if (!seg) continue;
-        const result = checkWord(seg);
-        results.push(result);
-        if (result.found) {
-            foundCount++;
-        } else {
-            missingCount++;
-        }
-    }
-    return { results, foundCount, missingCount, total: results.length };
-}
-
-function renderResults(results, foundCount, missingCount, total) {
-    const output = document.getElementById('outputBox');
-    if (total === 0) {
-        output.innerHTML = '<span style="color: #5c6e8c;">请输入内容</span>';
-        return;
-    }
-    let html = '';
-    for (const r of results) {
-        let colorClass = '';
-        if (r.found) {
-            if (r.type === 'exact') {
-                colorClass = 'word-found';
-            } else if (r.type === 'nato' || r.type === 'letter' || r.type === 'plus') {
-                colorClass = 'word-split';
-            } else if (r.type === 't_ed' || r.type === 't_ed_split' || r.type === 'ed' || r.type === 'ish' || r.type === 'like' || r.type === 'prefix') {
-                colorClass = 'word-split';
-            } else if (r.type === 'punctuation' || r.type === 'mtf' || r.type === 'glitch') {
-                colorClass = 'word-warning';
-            } else {
-                colorClass = 'word-found';
+            if (word === 'mtf') {
+                return { found: true, type: 'mtf', display: 'mtf → mobile task force' };
             }
-        } else {
-            colorClass = 'word-error';
+            if (/^g[1-9]$/.test(word)) {
+                return { found: true, type: 'glitch', display: word + ' (故障音效)' };
+            }
+            if (word.includes('+')) {
+                const phrase = word.replace(/\+/g, ' ');
+                if (wordSet.has(phrase)) {
+                    return { found: true, type: 'phrase', display: word + ' → ' + phrase };
+                }
+                return { found: false, type: 'phrase_missing', display: word + ' (短语未找到)' };
+            }
+            if (wordSet.has(word)) {
+                return { found: true, type: 'exact', display: word };
+            }
+            if (word in NATO_MAP) {
+                const mapped = NATO_MAP[word];
+                if (wordSet.has(mapped)) {
+                    return { found: true, type: 'nato', display: word + ' → ' + mapped };
+                }
+            }
+            if (/^[a-z]$/.test(word)) {
+                const prefixed = '_' + word;
+                if (wordSet.has(prefixed)) {
+                    return { found: true, type: 'letter', display: word + ' → ' + prefixed };
+                }
+            }
+            if (word.endsWith('ted')) {
+                const stem = word.slice(0, -3);
+                if (wordSet.has(stem) && wordSet.has('t-ed')) {
+                    return { found: true, type: 't_ed', display: word + ' → ' + stem + ' + t-ed' };
+                }
+                if (wordSet.has(stem) && wordSet.has('t') && wordSet.has('ed')) {
+                    return { found: true, type: 't_ed_split', display: word + ' → ' + stem + ' + t + ed' };
+                }
+            }
+            if (word.endsWith('ed')) {
+                const stem = word.slice(0, -2);
+                if (wordSet.has(stem) && wordSet.has('-ed')) {
+                    return { found: true, type: 'ed', display: word + ' → ' + stem + ' + -ed' };
+                }
+            }
+            if (word.endsWith('ish')) {
+                const stem = word.slice(0, -3);
+                if (wordSet.has(stem) && wordSet.has('-ish')) {
+                    return { found: true, type: 'ish', display: word + ' → ' + stem + ' + -ish' };
+                }
+            }
+            if (word.endsWith('like')) {
+                const stem = word.slice(0, -4);
+                if (wordSet.has(stem) && wordSet.has('-like')) {
+                    return { found: true, type: 'like', display: word + ' → ' + stem + ' + -like' };
+                }
+            }
+            const prefixes = ['anti', 'post', 'pre', 'pro', 'un'];
+            for (const pref of prefixes) {
+                if (word.startsWith(pref) && word.length > pref.length) {
+                    const stem = word.slice(pref.length);
+                    const prefFile = pref + '-';
+                    if (wordSet.has(prefFile) && wordSet.has(stem)) {
+                        return { found: true, type: 'prefix', display: word + ' → ' + prefFile + ' + ' + stem };
+                    }
+                }
+            }
+            return { found: false, type: 'missing', display: word };
         }
-        const displayText = r.display || r.text || '未知';
-        html += `<span class="${colorClass}">${displayText}</span> `;
-    }
-    const summary = `<div style="margin-top: 12px; padding-top: 12px; border-top: 1px solid #1e222a; font-size: 12px; color: #5c6e8c;">
-        总计 <span style="color: #8e9aaf;">${total}</span> 个段，
-        找到 <span style="color: #67c23a;">${foundCount}</span> 个，
-        缺失 <span style="color: #ff7b72;">${missingCount}</span> 个
-    </div>`;
-    output.innerHTML = html + summary;
-}
 
-function renderSpecialFiles() {
-    const specialFiles = [];
-    for (const word of wordList) {
-        if (word.includes('-') || word.includes('_') || word.includes(' ')) {
-            specialFiles.push(word);
+        function checkText(text) {
+            const segments = text.trim().split(/\s+/);
+            const results = [];
+            let foundCount = 0;
+            let missingCount = 0;
+            for (const seg of segments) {
+                if (!seg) continue;
+                const result = checkWord(seg);
+                results.push(result);
+                if (result.found) {
+                    foundCount++;
+                } else {
+                    missingCount++;
+                }
+            }
+            return { results, foundCount, missingCount, total: results.length };
         }
-    }
-    specialFiles.sort();
-    const output = document.getElementById('specialOutput');
-    if (specialFiles.length === 0) {
-        output.innerHTML = '<span style="color: #5c6e8c;">没有找到特殊音频文件</span>';
-        return;
-    }
-    let html = '';
-    for (const f of specialFiles) {
-        html += `<span style="display: inline-block; background-color: #1e222a; border-radius: 4px; padding: 2px 10px; margin: 4px 6px 4px 0; color: #79c0ff; font-family: monospace; font-size: 12px;">${f}</span>`;
-    }
-    output.innerHTML = html;
-}
 
-document.getElementById('specialBtn').addEventListener('click', function() {
-    renderSpecialFiles();
-});
+        function renderResults(results, foundCount, missingCount, total) {
+            const output = document.getElementById('outputBox');
+            if (total === 0) {
+                output.innerHTML = '<span style="color: #5c6e8c;">请输入内容</span>';
+                return;
+            }
+            let html = '';
+            for (const r of results) {
+                let colorClass = '';
+                if (r.found) {
+                    if (r.type === 'exact') {
+                        colorClass = 'word-found';
+                    } else if (r.type === 'nato' || r.type === 'letter' || r.type === 'phrase') {
+                        colorClass = 'word-split';
+                    } else if (r.type === 't_ed' || r.type === 't_ed_split' || r.type === 'ed' || r.type === 'ish' || r.type === 'like' || r.type === 'prefix') {
+                        colorClass = 'word-split';
+                    } else if (r.type === 'punctuation' || r.type === 'mtf' || r.type === 'glitch') {
+                        colorClass = 'word-warning';
+                    } else {
+                        colorClass = 'word-found';
+                    }
+                } else {
+                    colorClass = 'word-error';
+                }
+                const displayText = r.display || r.text || '未知';
+                html += `<span class="${colorClass}">${displayText}</span> `;
+            }
+            const summary = `<div style="margin-top: 12px; padding-top: 12px; border-top: 1px solid #1e222a; font-size: 12px; color: #5c6e8c;">
+                总计 <span style="color: #8e9aaf;">${total}</span> 个段，
+                找到 <span style="color: #67c23a;">${foundCount}</span> 个，
+                缺失 <span style="color: #ff7b72;">${missingCount}</span> 个
+            </div>`;
+            output.innerHTML = html + summary;
+        }
 
-document.getElementById('checkBtn').addEventListener('click', function() {
-    const text = document.getElementById('inputText').value;
-    if (!text.trim()) {
-        document.getElementById('outputBox').innerHTML = '<span style="color: #ff7b72;">请输入广播内容</span>';
-        return;
-    }
-    const { results, foundCount, missingCount, total } = checkText(text);
-    renderResults(results, foundCount, missingCount, total);
-    document.getElementById('statusText').textContent = '检测完成';
-});
 
-document.getElementById('clearBtn').addEventListener('click', function() {
-    document.getElementById('inputText').value = '';
-    document.getElementById('outputBox').innerHTML = '<span style="color: #5c6e8c;">等待检测...</span>';
-    document.getElementById('statusText').textContent = '已清空';
-});
+        function renderSpecialFiles() {
+            const specialFiles = [];
 
-loadWordList();
+            for (const word of wordList) {
+                if (word.includes('-') || word.includes('_') || word.includes(' ')) {
+                    specialFiles.push(word);
+                }
+            }
+
+            const extraFiles = [
+                '30s', '40s', '50s', '60s', '70s', '80s', '90s', '100s', '120s',
+                'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm',
+                'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z',
+                'ed'
+            ];
+
+            for (const f of extraFiles) {
+                if (!specialFiles.includes(f)) {
+                    specialFiles.push(f);
+                }
+            }
+
+            specialFiles.sort();
+
+            const output = document.getElementById('specialOutput');
+            if (specialFiles.length === 0) {
+                output.innerHTML = '<span style="color: #5c6e8c;">没有找到特殊音频文件</span>';
+                return;
+            }
+
+            let html = '';
+            for (const f of specialFiles) {
+                html += `<span style="display: inline-block; background-color: #1e222a; border-radius: 4px; padding: 2px 10px; margin: 4px 6px 4px 0; color: #79c0ff; font-family: monospace; font-size: 12px;">${f}</span>`;
+            }
+            // 顺便显示一下总数
+            html += `<div style="margin-top: 8px; color: #5c6e8c; font-size: 12px;">共 ${specialFiles.length} 个特殊文件</div>`;
+            output.innerHTML = html;
+        }
+
+        document.getElementById('specialBtn').addEventListener('click', function() {
+            renderSpecialFiles();
+        });
+
+        document.getElementById('checkBtn').addEventListener('click', function() {
+            const text = document.getElementById('inputText').value;
+            if (!text.trim()) {
+                document.getElementById('outputBox').innerHTML = '<span style="color: #ff7b72;">请输入广播内容</span>';
+                return;
+            }
+            const { results, foundCount, missingCount, total } = checkText(text);
+            renderResults(results, foundCount, missingCount, total);
+            document.getElementById('statusText').textContent = '检测完成';
+        });
+
+        document.getElementById('clearBtn').addEventListener('click', function() {
+            document.getElementById('inputText').value = '';
+            document.getElementById('outputBox').innerHTML = '<span style="color: #5c6e8c;">等待检测...</span>';
+            document.getElementById('statusText').textContent = '已清空';
+        });
+
+        loadWordList();
     </script>
 </body>
 </html>

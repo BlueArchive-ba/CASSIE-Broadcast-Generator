@@ -1,6 +1,8 @@
 import os
 import json
 
+PROJECT_BASE_PATH = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
 def get_existing_files(folder_path, extension=".wav"):
     existing = []
     if os.path.exists(folder_path):
@@ -10,13 +12,13 @@ def get_existing_files(folder_path, extension=".wav"):
     return existing
 
 def main():
-    with open("word_list.json", 'r', encoding='utf-8') as f:
+    with open(os.path.join(PROJECT_BASE_PATH, "word_list.json"), 'r', encoding='utf-8') as f:
         words_expected = set(json.load(f))
-    with open("sound_list.json", 'r', encoding='utf-8') as f:
+    with open(os.path.join(PROJECT_BASE_PATH, "sound_list.json"), 'r', encoding='utf-8') as f:
         sounds_expected = set(json.load(f))
 
-    words_existing = get_existing_files("cassie/words/")
-    sounds_existing = get_existing_files("cassie/sounds/")
+    words_existing = get_existing_files(os.path.join(PROJECT_BASE_PATH, "cassie", "words"))
+    sounds_existing = get_existing_files(os.path.join(PROJECT_BASE_PATH, "cassie", "sounds"))
 
     words_expected_set = set(words_expected)
     sounds_expected_set = set(sounds_expected)
