@@ -81,8 +81,6 @@ python cassie_play.py
 │   ├── words/           # 单词、数字、故障音和特殊音频
 │   └── sounds/          # 普通铃声与背景铃声
 ├── static/style.css     # 主页面样式
-├── archive/             # 旧版本、旧页面和系统元数据归档
-└── 须知！！.md           # 项目须知
 ```
 
 ## 音频素材

@@ -18,13 +18,7 @@
 │   └── CASSIE V 1.0.0/        # 当前版本 ← 一般从这里开始
 ├── CASSIE语音生成/
 │   ├── cassie_download.py     # 音频素材下载器（素材不随仓库分发）
-│   ├── 须知！！！.txt
-│   └── python 3.10/ 3.6.5/    # 对应 Python 版本的运行环境与打包
-├── bench2.py                  # 以下为走廊混响（FDN）实现期的研究脚本，
-├── bench_reverb.py            # 用来量化纯 Python 逐样本循环与 numpy 分块
-├── iso9613_air.py             # 的差异、空气吸收、单极点滤波器数值稳定性、
-├── onepole_stability.py       # 以及 RT60 与反馈增益的换算关系。
-└── verify_gain.py             # 不属于运行时代码，保留以备复现结论。
+│   └── 须知！！！.txt
 ```
 
 **当前版本在 [`CASSIE历代版本/CASSIE V 1.0.0/`](CASSIE历代版本/CASSIE%20V%201.0.0/)**，
