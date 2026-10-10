@@ -105,11 +105,28 @@ python cassie_play.py            # 启动
 
 | 文档 | 内容 |
 |---|---|
+| [版本对比](CASSIE历代版本/VERSIONS.md) | **三个版本的代码级差异**，附「该选哪一版」 |
 | [版本 README](CASSIE历代版本/CASSIE%20V%201.0.0/README.md) | 安装、用法、空间效果、进度与预设 |
 | [docs/help.html](CASSIE历代版本/CASSIE%20V%201.0.0/docs/help.html) | 面向普通用户的帮助（也可在服务里打开 `/help`） |
 | [docs/developer.html](CASSIE历代版本/CASSIE%20V%201.0.0/docs/developer.html) | 架构、音频实现、自定义指南（`/developer`） |
 | [docs/api.md](CASSIE历代版本/CASSIE%20V%201.0.0/docs/api.md) | HTTP API、参数表、进度事件、手动验证清单 |
 | [0.3 及以上使用教程](CASSIE历代版本/0.3%20及以上使用教程/CASSIE%20v0.3广播生成器使用教程.html) | 图文入门教程 |
+
+---
+
+## 历史版本
+
+三个版本都在 [Releases](https://github.com/BlueArchive-ba/CASSIE-Broadcast-Generator/releases)
+提供打包好的 zip：
+
+| 版本 | 特点 | 音频素材 |
+|---|---|---|
+| [V 1.0.0](https://github.com/BlueArchive-ba/CASSIE-Broadcast-Generator/releases/tag/v1.0.0) | FDN 混响、15 个 HTTP API、进度条、中英双语 | 需单独下载 |
+| [V 0.3](https://github.com/BlueArchive-ba/CASSIE-Broadcast-Generator/releases/tag/v0.3) | 补全指令与文档，多抽头混响 | 需单独下载 |
+| [V 0.2](https://github.com/BlueArchive-ba/CASSIE-Broadcast-Generator/releases/tag/v0.2) | 最早版本，只需 Python 3.6.5 | 需单独下载 |
+
+**三个版本都不含音频素材**，都必须先跑 `CASSIE语音生成/cassie_download.py`，
+或从 [素材仓库](https://github.com/BlueArchive-ba/CASSIE) 下载。
 
 ---
 
