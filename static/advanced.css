@@ -1,0 +1,310 @@
+/* C.A.S.S.I.E. — 高级设置面板（黑底 / 白字 / 蓝红点缀） */
+
+#advancedModal .modal {
+    width: 92%;
+    max-width: 780px;
+    max-height: 88vh;
+    padding: 22px 22px 0;
+}
+
+.settings-section {
+    position: relative;
+    margin: 0 0 12px;
+    padding: 14px 16px;
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid var(--border-soft);
+    border-radius: var(--r-md);
+}
+
+.settings-section .settings-section {
+    background: rgba(0, 0, 0, 0.35);
+    border-color: var(--border-soft);
+}
+
+.settings-section > h4 {
+    margin: 0 0 12px;
+    padding-left: 9px;
+    border-left: 2px solid var(--blue);
+    color: var(--text);
+    font-size: 12.5px;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+}
+
+.settings-section > p.settings-hint {
+    margin-top: -4px;
+    margin-bottom: 13px;
+}
+
+.settings-field {
+    margin: 0 0 13px;
+}
+
+.settings-field:last-child {
+    margin-bottom: 0;
+}
+
+.settings-label {
+    display: block;
+    margin: 0 0 5px;
+    color: var(--text-soft);
+    font-size: 12.5px;
+    line-height: 1.45;
+}
+
+.settings-hint {
+    display: block;
+    margin: 5px 0 0;
+    color: var(--text-faint);
+    font-size: 11.5px;
+    line-height: 1.6;
+}
+
+#advancedModal input[type='number'] {
+    width: 100%;
+    margin-bottom: 0;
+}
+
+#advancedModal select {
+    width: 100%;
+    margin-bottom: 0;
+    font-size: 12.5px;
+}
+
+#advancedModal .settings-toggle,
+#advancedModal input[type='checkbox'].settings-toggle {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: 0;
+    padding: 0;
+    opacity: 0;
+    pointer-events: none;
+}
+
+.settings-switch {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin: 0 0 3px;
+    cursor: pointer;
+    user-select: none;
+}
+
+.settings-switch-track {
+    position: relative;
+    flex: 0 0 auto;
+    width: 40px;
+    height: 22px;
+    border-radius: var(--r-sm);
+    background: var(--well);
+    border: 1px solid var(--border);
+    transition: background-color var(--fast) var(--ease), border-color var(--fast) var(--ease);
+}
+
+.settings-switch-track::after {
+    content: '';
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 16px;
+    height: 16px;
+    border-radius: var(--r-xs);
+    background: rgba(255, 255, 255, 0.5);
+    transition: transform var(--fast) var(--ease), background-color var(--fast) var(--ease);
+}
+
+#advancedModal input.settings-toggle:checked + .settings-switch-track {
+    background: var(--blue);
+    border-color: var(--blue-bright);
+}
+
+#advancedModal input.settings-toggle:checked + .settings-switch-track::after {
+    transform: translateX(18px);
+    background: #ffffff;
+}
+
+#advancedModal input.settings-toggle:focus-visible + .settings-switch-track {
+    box-shadow: var(--focus);
+}
+
+#advancedModal input.settings-toggle:not(:checked) ~ #effectControls {
+    opacity: 0.4;
+    pointer-events: none;
+}
+
+.settings-switch-text {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+}
+
+.settings-switch-text strong {
+    color: var(--text);
+    font-size: 13px;
+    font-weight: 600;
+}
+
+.settings-switch-text small {
+    color: var(--text-faint);
+    font-size: 11.5px;
+    line-height: 1.5;
+}
+
+#advancedModal .settings-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 0;
+}
+
+#advancedModal .settings-row > label {
+    flex: 0 0 104px;
+    color: var(--text-soft);
+    font-size: 12.5px;
+    line-height: 1.35;
+}
+
+#advancedModal input[type='range'] {
+    flex: 1 1 auto;
+    width: auto;
+    min-width: 0;
+    margin: 0;
+    padding: 0;
+}
+
+#advancedModal .settings-row output,
+.settings-row output {
+    flex: 0 0 56px;
+    color: var(--blue-bright);
+    font-family: var(--font-mono);
+    font-size: 11.5px;
+    font-weight: 600;
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+}
+
+.space-preview {
+    display: flex;
+    align-items: flex-end;
+    gap: 3px;
+    height: 42px;
+    margin: 3px 0 14px;
+    padding: 7px 9px;
+    background: var(--well);
+    border: 1px solid var(--border-soft);
+    border-radius: var(--r-xs);
+}
+
+.space-preview i {
+    display: block;
+    flex: 1 1 auto;
+    min-width: 2px;
+    height: calc(var(--level, 0.3) * 100%);
+    border-radius: 1px;
+    background: linear-gradient(180deg, var(--blue-bright), var(--blue));
+    transition: height 0.2s var(--ease);
+}
+
+.space-preview i:nth-child(1)  { --level: 1; }
+.space-preview i:nth-child(2)  { --level: 0.82; }
+.space-preview i:nth-child(3)  { --level: 0.68; }
+.space-preview i:nth-child(4)  { --level: 0.56; }
+.space-preview i:nth-child(5)  { --level: 0.46; }
+.space-preview i:nth-child(6)  { --level: 0.38; }
+.space-preview i:nth-child(7)  { --level: 0.31; }
+.space-preview i:nth-child(8)  { --level: 0.26; }
+.space-preview i:nth-child(9)  { --level: 0.21; }
+.space-preview i:nth-child(10) { --level: 0.17; }
+.space-preview i:nth-child(11) { --level: 0.14; }
+.space-preview i:nth-child(12) { --level: 0.11; }
+
+#effectControls {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    transition: opacity var(--fast) var(--ease);
+}
+
+#effectControls.is-disabled {
+    opacity: 0.4;
+    pointer-events: none;
+}
+
+.advanced-actions {
+    position: sticky;
+    bottom: 0;
+    z-index: 2;
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    margin: 6px -22px 0;
+    padding: 13px 22px;
+    background: var(--surface-raised);
+    border-top: 1px solid var(--border-soft);
+}
+
+.advanced-actions button {
+    padding: 9px 18px;
+    background: var(--blue);
+    border: 1px solid var(--blue-bright);
+    border-radius: var(--r-sm);
+    color: #fff;
+    font-family: inherit;
+    font-size: 12.5px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background-color var(--fast) var(--ease), border-color var(--fast) var(--ease);
+}
+
+.advanced-actions button:hover {
+    background: var(--blue-bright);
+}
+
+.advanced-actions button:focus-visible {
+    outline: none;
+    box-shadow: var(--focus);
+}
+
+.advanced-actions button.secondary {
+    background: transparent;
+    border-color: var(--border);
+    color: var(--text-soft);
+    font-weight: 500;
+}
+
+.advanced-actions button.secondary:hover {
+    background: rgba(255, 255, 255, 0.06);
+    border-color: var(--border-strong);
+    color: var(--text);
+}
+
+@media (max-width: 680px) {
+    #advancedModal .modal {
+        padding: 17px 17px 0;
+    }
+
+    .settings-section {
+        padding: 12px 13px;
+    }
+
+    #advancedModal .settings-row {
+        flex-wrap: wrap;
+        gap: 8px;
+    }
+
+    #advancedModal .settings-row > label {
+        flex: 1 1 100%;
+    }
+
+    #advancedModal .settings-row output {
+        flex: 0 0 48px;
+    }
+
+    .advanced-actions {
+        margin-left: -17px;
+        margin-right: -17px;
+        padding: 11px 17px;
+    }
+}

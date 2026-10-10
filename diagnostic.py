@@ -6,63 +6,50 @@ import sys
 import importlib.metadata
 import time
 
-PROJECT_BASE_PATH = os.path.dirname(os.path.abspath(__file__))
+from rich.console import Console
+from rich.table import Table
+from rich.panel import Panel
+from rich.prompt import Confirm
+from rich import box
 
-GREEN = "\033[92m"
-RED = "\033[91m"
-YELLOW = "\033[93m"
-RESET = "\033[0m"
+PROJECT_BASE_PATH = os.path.dirname(os.path.abspath(__file__))
+console = Console()
+
 
 def print_section(title):
-    print("\n" + "=" * 70)
-    print(f"{title}")
-    print("=" * 70)
+    console.rule(f"[bold cyan]{title}[/bold cyan]")
+
 
 def print_subsection(title):
-    print(f"\n--- {title} ---")
+    console.print(f"\n[bold]{title}[/bold]")
 
-def print_item(status, name, detail=""):
-    if status is None:
-        status_char = "?"
-        color = YELLOW
-    elif status:
-        status_char = "✓"
-        color = GREEN
-    else:
-        status_char = "✗"
-        color = RED
-    print(f"  {color}{status_char}{RESET} {name}: {detail}")
 
 def ask_yes_no(prompt):
-    while True:
-        ans = input(f"{prompt} (Y/N): ").strip().lower()
-        if ans in ('y', 'yes'):
-            return True
-        elif ans in ('n', 'no'):
-            return False
-        else:
-            print("请输入 Y 或 N")
+    return Confirm.ask(f"[bold]{prompt}[/bold]")
+
 
 def run_command(cmd, description):
-    print(f"  执行: {cmd}")
+    console.print(f"  [dim]执行:[/dim] {cmd}")
     try:
         subprocess.run(cmd, shell=True, check=True)
-        print(f"  {description} " + GREEN + "成功" + RESET)
+        console.print(f"  {description} [green]成功[/green]")
         return True
     except subprocess.CalledProcessError:
-        print(f"  {description} " + RED + "失败" + RESET)
+        console.print(f"  {description} [red]失败[/red]")
         return False
+
 
 def pip_install(package_name):
     pip_cmd = [sys.executable, '-m', 'pip', 'install', package_name]
-    print(f"  执行: {' '.join(pip_cmd)}")
+    console.print(f"  [dim]执行:[/dim] {' '.join(pip_cmd)}")
     try:
         subprocess.run(pip_cmd, check=True)
-        print(f"  {package_name} " + GREEN + "安装成功" + RESET)
+        console.print(f"  {package_name} [green]安装成功[/green]")
         return True
     except subprocess.CalledProcessError:
-        print(f"  {package_name} " + RED + "安装失败" + RESET)
+        console.print(f"  {package_name} [red]安装失败[/red]")
         return False
+
 
 def get_package_version(package_name):
     try:
@@ -70,12 +57,14 @@ def get_package_version(package_name):
     except importlib.metadata.PackageNotFoundError:
         return None
 
+
 def check_python_version():
     version = sys.version_info
-    required = (3, 6, 15)
+    required = (3, 10, 15)
     ok = version >= required
-    detail = f"{version.major}.{version.minor}.{version.micro} (需要 >= 3.6.15)"
+    detail = f"{version.major}.{version.minor}.{version.micro} (需要 >= 3.10.15)"
     return ok, detail, f"{version.major}.{version.minor}.{version.micro}"
+
 
 def check_ffmpeg():
     try:
@@ -85,12 +74,14 @@ def check_ffmpeg():
     except FileNotFoundError:
         return False, "未安装"
 
+
 def check_colorednoise():
     try:
         import colorednoise
         return True, get_package_version('colorednoise') or "已安装"
     except ImportError:
         return False, "未安装"
+
 
 def check_numpy():
     try:
@@ -99,12 +90,14 @@ def check_numpy():
     except ImportError:
         return False, "未安装"
 
+
 def check_bottle():
     try:
         import bottle
         return True, get_package_version('bottle') or "已安装"
     except ImportError:
         return False, "未安装"
+
 
 def check_pygame():
     try:
@@ -113,6 +106,7 @@ def check_pygame():
     except ImportError:
         return False, "未安装"
 
+
 def check_pydub():
     try:
         import pydub
@@ -120,12 +114,30 @@ def check_pydub():
     except ImportError:
         return False, "未安装"
 
+
 def check_cheroot():
     try:
         import cheroot
         return True, get_package_version('cheroot') or "已安装"
     except ImportError:
         return False, "未安装"
+
+
+def check_requests():
+    try:
+        import requests
+        return True, get_package_version('requests') or "已安装"
+    except ImportError:
+        return False, "未安装"
+
+
+def check_rich():
+    try:
+        import rich
+        return True, get_package_version('rich') or "已安装"
+    except ImportError:
+        return False, "未安装"
+
 
 def check_files():
     results = []
@@ -135,14 +147,17 @@ def check_files():
     if cassie_exists:
         words_exists = os.path.exists('cassie/words/')
         sounds_exists = os.path.exists('cassie/sounds/')
-        if words_exists and sounds_exists:
-            results.append(('cassie/', True, '存在，包含 words/ 和 sounds/ 子文件夹'))
+        alarms_exists = os.path.exists('cassie/alarms/')
+        if words_exists and sounds_exists and alarms_exists:
+            results.append(('cassie/', True, '存在，包含 words/、sounds/ 和 alarms/ 子文件夹'))
         else:
             missing = []
             if not words_exists:
                 missing.append('words/')
             if not sounds_exists:
                 missing.append('sounds/')
+            if not alarms_exists:
+                missing.append('alarms/')
             results.append(('cassie/', False, f'存在，但缺少子文件夹: {", ".join(missing)}'))
     else:
         results.append(('cassie/', False, '文件夹不存在'))
@@ -197,6 +212,7 @@ def check_files():
         results.append(('__pycache__/', False, '文件夹不存在'))
     return results
 
+
 def check_audio_files():
     if not os.path.exists('word_list.json') or not os.path.exists('sound_list.json'):
         return None, "word_list.json 或 sound_list.json 不存在，跳过音频匹配检测"
@@ -237,75 +253,89 @@ def check_audio_files():
     words_extra = words_existing - words_expected
     sounds_extra = sounds_existing - sounds_expected
     if words_extra:
-        print(f"{YELLOW}words 文件夹有多余文件: {', '.join(sorted(words_extra))}")
+        console.print(f"[yellow]words 文件夹有多余文件: {', '.join(sorted(words_extra))}[/yellow]")
     if sounds_extra:
-        print(f"{YELLOW}sounds 文件夹有多余文件: {', '.join(sorted(sounds_extra))}")
+        console.print(f"[yellow]sounds 文件夹有多余文件: {', '.join(sorted(sounds_extra))}[/yellow]")
 
     if not details:
         return True, "所有音频文件匹配"
     else:
         return False, "; ".join(details)
 
+
 def install_ffmpeg():
     system = platform.system()
     if system == 'Darwin':
-        print("  检测到 macOS，将尝试使用 Homebrew 安装 ffmpeg...")
+        console.print("  检测到 macOS，将尝试使用 Homebrew 安装 ffmpeg...")
         if not run_command('brew install ffmpeg', 'ffmpeg 安装'):
-            print("  如果 Homebrew 未安装，请先安装 Homebrew: /bin/bash -c \"$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)\"")
+            console.print("  如果 Homebrew 未安装，请先安装 Homebrew: [link]https://brew.sh[/link]")
     elif system == 'Windows':
-        print("  检测到 Windows，请手动下载 ffmpeg 并添加到 PATH。")
-        print("  下载地址: https://ffmpeg.org/download.html")
-        print("  安装后请重启终端再运行此诊断工具。")
+        console.print("  检测到 Windows，请手动下载 ffmpeg 并添加到 PATH。")
+        console.print("  下载地址: [link]https://ffmpeg.org/download.html[/link]")
+        console.print("  安装后请重启终端再运行此诊断工具。")
     else:
-        print(f"  不支持的系统: {system}，请手动安装 ffmpeg")
+        console.print(f"  不支持的系统: {system}，请手动安装 ffmpeg")
+
 
 def install_colorednoise():
-    print("  正在安装 colorednoise 和 numpy...")
+    console.print("  正在安装 colorednoise 和 numpy...")
     if pip_install('colorednoise') and pip_install('numpy'):
-        print("  colorednoise 和 numpy " + GREEN + "安装成功" + RESET)
+        console.print("  [green]colorednoise 和 numpy 安装成功[/green]")
     else:
-        print("  " + RED + "安装失败" + RESET + "，请手动执行: pip install colorednoise numpy")
+        console.print("  [red]安装失败[/red]，请手动执行: pip install colorednoise numpy")
+
 
 def main():
     os.chdir(PROJECT_BASE_PATH)
-    print_section("CASSIE 广播生成器 - 诊断工具")
-    print("开始时间: " + time.strftime("%Y-%m-%d %H:%M:%S"))
-    print("=" * 70)
+    console.print(Panel.fit(
+        "[bold cyan]CASSIE 广播生成器 - 诊断工具[/bold cyan]",
+        box=box.DOUBLE,
+        border_style="cyan",
+    ))
+    console.print(f"[dim]开始时间: {time.strftime('%Y-%m-%d %H:%M:%S')}[/dim]")
 
     system = platform.system()
     overall_success = True
     pending_fixes = []
 
     print_subsection("操作系统详细检测")
-    print(f"  系统名称: {system}")
+    os_table = Table(show_header=False, box=box.SIMPLE, padding=(0, 2))
+    os_table.add_column("项目", style="cyan")
+    os_table.add_column("值")
+    os_table.add_row("系统名称", system)
     if system == 'Darwin':
         ver = platform.mac_ver()[0] or "未知"
-        print(f"  macOS 版本: {ver}")
-        print(f"  架构: {platform.machine()}")
-        print(f"  处理器: {platform.processor()}")
+        os_table.add_row("macOS 版本", ver)
+        os_table.add_row("架构", platform.machine())
+        os_table.add_row("处理器", platform.processor())
         if ver and int(ver.split('.')[0]) < 13:
-            print(f"  {YELLOW}提示: macOS 版本低于 13.0，浏览器系统音频共享可能受限{RESET}")
+            os_table.add_row("提示", "[yellow]macOS 版本低于 13.0，浏览器系统音频共享可能受限[/yellow]")
     elif system == 'Windows':
         ver = platform.version()
-        print(f"  Windows 版本: {ver}")
-        print(f"  架构: {platform.machine()}")
+        os_table.add_row("Windows 版本", ver)
+        os_table.add_row("架构", platform.machine())
         if int(ver.split('.')[0]) < 10:
-            print(f"  {YELLOW}提示: Windows 版本低于 10，浏览器系统音频共享可能受限{RESET}")
+            os_table.add_row("提示", "[yellow]Windows 版本低于 10，浏览器系统音频共享可能受限[/yellow]")
     else:
-        print(f"  {RED}不支持的操作系统{RESET}")
+        os_table.add_row("状态", "[red]不支持的操作系统[/red]")
         overall_success = False
+    console.print(os_table)
 
     print_subsection("Python 版本检测")
     py_ok, py_detail, py_ver = check_python_version()
-    print(f"  Python 版本: {py_ver}")
-    print(f"  构建日期: {sys.version.split('[')[0] if '[' in sys.version else sys.version.split()[0]}")
-    print(f"  编译器: {sys.version.split('[')[-1][:-1] if '[' in sys.version else '未知'}")
-    print(f"  平台: {platform.platform()}")
+    py_table = Table(show_header=False, box=box.SIMPLE, padding=(0, 2))
+    py_table.add_column("项目", style="cyan")
+    py_table.add_column("值")
+    py_table.add_row("Python 版本", py_ver)
+    py_table.add_row("构建日期", sys.version.split('[')[0] if '[' in sys.version else sys.version.split()[0])
+    py_table.add_row("编译器", sys.version.split('[')[-1][:-1] if '[' in sys.version else '未知')
+    py_table.add_row("平台", platform.platform())
     if not py_ok:
-        print(f"  {RED}Python 版本过低，请升级到 3.6.5 或更高版本{RESET}")
+        py_table.add_row("状态", "[red]版本过低，请升级到 3.10.15 或更高[/red]")
         overall_success = False
     else:
-        print(f"  {GREEN}Python 版本符合要求{RESET}")
+        py_table.add_row("状态", "[green]符合要求[/green]")
+    console.print(py_table)
 
     print_subsection("第三方库检测")
     libs = {
@@ -315,54 +345,68 @@ def main():
         'colorednoise': check_colorednoise,
         'numpy': check_numpy,
         'cheroot': check_cheroot,
+        'requests': check_requests,
+        'rich': check_rich,
     }
+    lib_table = Table(show_header=True, header_style="bold magenta", box=box.ROUNDED)
+    lib_table.add_column("库名", style="cyan")
+    lib_table.add_column("状态", justify="center")
+    lib_table.add_column("版本")
     for name, func in libs.items():
         ok, detail = func()
         if ok:
             ver = get_package_version(name)
-            print(f"  {GREEN}✓{RESET} {name}: 已安装 (版本: {ver})")
+            lib_table.add_row(name, "[green]已安装[/green]", ver or "-")
         else:
-            print(f"  {RED}✗{RESET} {name}: 未安装 (需要最新版本)")
+            lib_table.add_row(name, "[red]未安装[/red]", "-")
             overall_success = False
-            if name in ('colorednoise', 'numpy'):
+            if name in ('colorednoise', 'numpy', 'requests', 'rich'):
                 pending_fixes.append((name, f'安装 {name}'))
+    console.print(lib_table)
 
     print_subsection("ffmpeg 检测")
     has_ffmpeg, ffmpeg_ver = check_ffmpeg()
     if has_ffmpeg:
-        print(f"  {GREEN}✓{RESET} ffmpeg: 已安装 ({ffmpeg_ver})")
+        console.print(f"  [green]✓[/green] ffmpeg: 已安装 ({ffmpeg_ver})")
     else:
-        print(f"  {RED}✗{RESET} ffmpeg: 未安装 (需要用于音频处理)")
+        console.print(f"  [red]✗[/red] ffmpeg: 未安装 (需要用于音频处理)")
         overall_success = False
         pending_fixes.append(('ffmpeg', '安装 ffmpeg'))
 
     print_subsection("必要文件和文件夹检测")
     file_results = check_files()
+    file_table = Table(show_header=True, header_style="bold magenta", box=box.ROUNDED)
+    file_table.add_column("项目", style="cyan")
+    file_table.add_column("状态", justify="center")
+    file_table.add_column("详情")
     for name, status, detail in file_results:
-        if status:
-            print(f"  {GREEN}✓{RESET} {name}: {detail}")
-        else:
-            print(f"  {RED}✗{RESET} {name}: {detail}")
-            if name not in ('presets.json', 'word_list.json', 'sound_list.json'):
-                overall_success = False
+        status_text = "[green]存在[/green]" if status else "[red]缺失[/red]"
+        if not status and name not in ('presets.json', 'word_list.json', 'sound_list.json'):
+            overall_success = False
+        file_table.add_row(name, status_text, detail)
+    console.print(file_table)
 
     print_subsection("音频文件匹配检测")
     audio_status, audio_detail = check_audio_files()
     if audio_status is None:
-        print(f"  {audio_detail}")
+        console.print(f"  [yellow]{audio_detail}[/yellow]")
         overall_success = False
     else:
         if audio_status:
-            print(f"  {GREEN}✓{RESET} 音频文件匹配: {audio_detail}")
+            console.print(f"  [green]✓[/green] 音频文件匹配: {audio_detail}")
         else:
-            print(f"  {RED}✗{RESET} 音频文件匹配: {audio_detail}")
+            console.print(f"  [red]✗[/red] 音频文件匹配: {audio_detail}")
             overall_success = False
 
     if pending_fixes:
-        print("\n" + "=" * 70)
-        print("检测到以下问题，可选择自动修复:")
+        console.print()
+        console.print(Panel(
+            "[bold yellow]检测到以下问题，可选择自动修复[/bold yellow]",
+            border_style="yellow",
+            box=box.ROUNDED,
+        ))
         for i, (key, desc) in enumerate(pending_fixes, 1):
-            print(f"  {i}. {desc}")
+            console.print(f"  [cyan]{i}.[/cyan] {desc}")
 
         for key, desc in pending_fixes:
             if key == 'ffmpeg':
@@ -371,32 +415,66 @@ def main():
                     if check_ffmpeg()[0]:
                         overall_success = True
                     else:
-                        print("  ffmpeg " + RED + "安装失败" + RESET)
+                        console.print("  [red]ffmpeg 安装失败[/red]")
             elif key == 'colorednoise':
                 if ask_yes_no(f"  是否自动安装 {desc}？"):
                     install_colorednoise()
                     if check_colorednoise()[0] and check_numpy()[0]:
                         overall_success = True
                     else:
-                        print("  " + RED + "安装失败" + RESET)
+                        console.print("  [red]安装失败[/red]")
             elif key == 'numpy':
                 if ask_yes_no(f"  是否自动安装 {desc}？"):
                     if pip_install('numpy'):
                         overall_success = True
                     else:
-                        print("  numpy " + RED + "安装失败" + RESET)
+                        console.print("  [red]numpy 安装失败[/red]")
+            elif key == 'requests':
+                if ask_yes_no(f"  是否自动安装 {desc}？"):
+                    if pip_install('requests'):
+                        overall_success = True
+                    else:
+                        console.print("  [red]requests 安装失败[/red]")
+            elif key == 'rich':
+                if ask_yes_no(f"  是否自动安装 {desc}？"):
+                    if pip_install('rich'):
+                        overall_success = True
+                    else:
+                        console.print("  [red]rich 安装失败[/red]")
     else:
-        print("\n没有检测到可自动修复的问题。")
+        console.print("\n[dim]没有检测到可自动修复的问题。[/dim]")
 
-    print("\n" + "=" * 70)
-    print("诊断完成时间: " + time.strftime("%Y-%m-%d %H:%M:%S"))
-    if overall_success:
-        print(GREEN + "检测成功" + RESET)
-        print("所有项目均已通过检测，系统环境就绪。")
-    else:
-        print(RED + "检测失败" + RESET)
-        print("部分问题需要手动处理，请参考上述提示。")
-    print("=" * 70)
+    # 素材缺失是新用户最常见的卡点，单独给一块可照着做的说明
+    words_dir = 'cassie/words/'
+    words_present = os.path.exists(words_dir) and any(
+        name.endswith('.wav') for name in os.listdir(words_dir))
+    if not words_present:
+        console.print()
+        console.print(Panel(
+            "[bold red]没有找到音频素材[/bold red]\n\n"
+            "本仓库和发布包都[bold]不包含音频素材[/bold]，"
+            "必须单独下载后程序才能生成广播。\n\n"
+            "运行下载器（推荐，会自动解压到正确位置）：\n"
+            "  [bold cyan]cd ../CASSIE语音生成[/bold cyan]\n"
+            "  [bold cyan]python cassie_download.py[/bold cyan]\n\n"
+            "或从发布页获取：\n"
+            "  [link]https://github.com/BlueArchive-ba/CASSIE-Broadcast-Generator/releases[/link]\n\n"
+            "[dim]下载完成后重新运行本诊断工具确认。[/dim]",
+            box=box.ROUNDED,
+            border_style="red",
+        ))
+
+    console.print()
+    console.print(Panel.fit(
+        f"[bold]诊断完成[/bold]\n"
+        f"[dim]结束时间: {time.strftime('%Y-%m-%d %H:%M:%S')}[/dim]\n\n"
+        + ("[bold green]检测成功[/bold green]\n所有项目均已通过检测，系统环境就绪。"
+           if overall_success else
+           "[bold red]检测失败[/bold red]\n部分问题需要手动处理，请参考上述提示。"),
+        box=box.DOUBLE,
+        border_style="green" if overall_success else "red",
+    ))
+
 
 if __name__ == "__main__":
     main()

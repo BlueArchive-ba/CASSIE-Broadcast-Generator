@@ -3,335 +3,129 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>C.A.S.S.I.E. 词汇检测工具</title>
-    <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-
-        body {
-            background-color: #0a0c10;
-            background-image: radial-gradient(circle at 25% 40%, rgba(30, 35, 45, 0.4) 0%, #0a0c10 90%);
-            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
-            min-height: 100vh;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            padding: 24px;
-        }
-
-        .container {
-            width: 900px;
-            max-width: 100%;
-            background-color: #0f1219;
-            border: 1px solid #2a2e35;
-            border-radius: 16px;
-            padding: 32px 36px;
-            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
-        }
-
-        .header {
-            text-align: center;
-            margin-bottom: 28px;
-        }
-
-        .header h1 {
-            color: #eef2f5;
-            font-size: 26px;
-            font-weight: 500;
-            letter-spacing: 0.5px;
-            margin-bottom: 4px;
-            animation: fadeInDown 0.4s ease;
-        }
-
-        .header .subtitle {
-            color: #6a7a8e;
-            font-size: 13px;
-            font-family: 'Fira Code', monospace;
-            letter-spacing: 2px;
-            animation: fadeInDown 0.5s ease;
-        }
-
-        @keyframes fadeInDown {
-            from {
-                opacity: 0;
-                transform: translateY(-12px);
-            }
-            to {
-                opacity: 1;
-                transform: translateY(0);
-            }
-        }
-
-        .input-area {
-            margin-bottom: 20px;
-            animation: fadeInUp 0.5s ease 0.1s both;
-        }
-
-        .input-area label {
-            color: #8e9aaf;
-            font-size: 13px;
-            font-weight: 400;
-            display: block;
-            margin-bottom: 8px;
-        }
-
-        .input-area textarea {
-            width: 100%;
-            height: 140px;
-            background-color: #0a0c10;
-            border: 1px solid #2a2e35;
-            border-radius: 10px;
-            padding: 14px 16px;
-            color: #e2e8f2;
-            font-family: 'Fira Code', 'Courier New', monospace;
-            font-size: 14px;
-            resize: vertical;
-            transition: border-color 0.2s ease, box-shadow 0.2s ease;
-        }
-
-        .input-area textarea:focus {
-            outline: none;
-            border-color: #4a6080;
-            box-shadow: 0 0 0 3px rgba(74, 96, 128, 0.15);
-        }
-
-        .input-area textarea::placeholder {
-            color: #4a5260;
-        }
-
-        .button-group {
-            display: flex;
-            gap: 12px;
-            margin-bottom: 24px;
-            animation: fadeInUp 0.5s ease 0.2s both;
-        }
-
-        .btn {
-            flex: 1;
-            padding: 12px 0;
-            border: none;
-            border-radius: 40px;
-            font-size: 15px;
-            font-weight: 500;
-            cursor: pointer;
-            transition: transform 0.08s ease, background-color 0.15s ease;
-        }
-
-        .btn-primary {
-            background-color: #1a1e26;
-            border: 1px solid #303540;
-            color: #d8e2f2;
-        }
-
-        .btn-primary:hover {
-            background-color: #222733;
-        }
-
-        .btn-primary:active {
-            transform: scale(0.97);
-        }
-
-        .btn-secondary {
-            background-color: #0f1219;
-            border: 1px solid #2a2e35;
-            color: #8e9aaf;
-        }
-
-        .btn-secondary:hover {
-            background-color: #1a1e26;
-        }
-
-        .btn-secondary:active {
-            transform: scale(0.97);
-        }
-
-        @keyframes fadeInUp {
-            from {
-                opacity: 0;
-                transform: translateY(12px);
-            }
-            to {
-                opacity: 1;
-                transform: translateY(0);
-            }
-        }
-
-        .output-area {
-            animation: fadeInUp 0.5s ease 0.3s both;
-        }
-
-        .output-area label {
-            color: #8e9aaf;
-            font-size: 13px;
-            font-weight: 400;
-            display: block;
-            margin-bottom: 8px;
-        }
-
-        .output-box {
-            background-color: #07090e;
-            border: 1px solid #232830;
-            border-radius: 10px;
-            padding: 14px 16px;
-            min-height: 200px;
-            max-height: 400px;
-            overflow-y: auto;
-            font-family: 'Fira Code', 'Courier New', monospace;
-            font-size: 13px;
-            color: #b7c9e2;
-            line-height: 1.6;
-            white-space: pre-wrap;
-            word-break: break-word;
-        }
-
-        .output-box .word-normal {
-            color: #98c379;
-        }
-
-        .output-box .word-error {
-            color: #ff7b72;
-            text-decoration: underline wavy #ff7b72;
-        }
-
-        .output-box .word-warning {
-            color: #79c0ff;
-        }
-
-        .output-box .word-split {
-            color: #d2a8ff;
-        }
-
-        .output-box .word-found {
-            color: #67c23a;
-        }
-
-        .output-box .line-separator {
-            color: #4a5260;
-            margin: 6px 0;
-        }
-
-        .status-bar {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-top: 16px;
-            padding: 8px 12px;
-            background-color: #0a0c10;
-            border-radius: 8px;
-            border: 1px solid #1e222a;
-            font-size: 12px;
-            color: #5c6e8c;
-            font-family: 'Fira Code', monospace;
-            animation: fadeInUp 0.5s ease 0.4s both;
-        }
-
-        .status-bar .count {
-            color: #8e9aaf;
-        }
-
-        .status-bar .count span {
-            color: #79c0ff;
-        }
-
-        ::-webkit-scrollbar {
-            width: 6px;
-            height: 6px;
-        }
-
-        ::-webkit-scrollbar-track {
-            background: #0f1219;
-        }
-
-        ::-webkit-scrollbar-thumb {
-            background: #2a2e35;
-            border-radius: 4px;
-        }
-
-        ::-webkit-scrollbar-thumb:hover {
-            background: #3a4050;
-        }
-
-        .tag {
-            display: inline-block;
-            background-color: #1e222a;
-            border-radius: 4px;
-            padding: 2px 8px;
-            font-size: 11px;
-            color: #5c6e8c;
-            font-family: 'Fira Code', monospace;
-        }
-
-        .loading {
-            color: #5c6e8c;
-            font-size: 13px;
-            font-family: 'Fira Code', monospace;
-        }
-
-        @media (max-width: 600px) {
-            .container {
-                padding: 20px 16px;
-            }
-            .header h1 {
-                font-size: 20px;
-            }
-            .button-group {
-                flex-direction: column;
-            }
-            .input-area textarea {
-                height: 100px;
-            }
-            .output-box {
-                min-height: 150px;
-                max-height: 300px;
-                font-size: 12px;
-            }
-        }
-    </style>
+    <title data-i18n="ws.title">C.A.S.S.I.E. 词汇检测工具</title>
+    <link rel="stylesheet" href="/static/glass.css">
+    <link rel="stylesheet" href="/static/wordsearch.css">
 </head>
 <body>
-    <div class="container">
+    <!-- 顶栏：返回主页链接 + i18n.js 自动挂载的语言切换控件
+         （观感是设计系统底座里的分段控件：4px 圆角 + 1px 描边，不是胶囊；
+         选中态是蓝 --toggle-active，由 glass.css 给出） -->
+    <div class="topbar">
+        <a class="topbar__home" href="/cassie_play"
+           data-i18n="ws.backHome" data-i18n-title="ws.backHomeTitle">返回主页</a>
+        <div class="lang-host" data-lang-toggle></div>
+    </div>
+
+    <div class="container panel">
         <div class="header">
-            <h1>C.A.S.S.I.E. 词汇检测工具</h1>
-            <div class="subtitle">检测广播内容中每个单词的可播放性</div>
+            <h1 data-i18n="ws.title">C.A.S.S.I.E. 词汇检测工具</h1>
+            <div class="subtitle" data-i18n="ws.subtitle">检测广播内容中每个单词的可播放性</div>
         </div>
 
         <div class="input-area">
-            <label for="inputText">输入广播内容</label>
-            <textarea id="inputText" placeholder="输入广播内容，全小写，标点符号左右加空格..."></textarea>
+            <label for="inputText" data-i18n="ws.inputLabel">输入广播内容</label>
+            <!-- spellcheck/autocomplete 关掉：广播文本本来就全小写、大量非词典词，
+                 浏览器会给几乎每个词画彩色波浪线，既没用，又会跟本页
+                 「红色波浪线 = 未命中」这套结果着色撞车 -->
+            <textarea id="inputText" data-i18n-placeholder="ws.inputPlaceholder"
+                      placeholder="输入广播内容，全小写，标点符号左右加空格..."
+                      spellcheck="false" autocomplete="off" autocapitalize="off"></textarea>
         </div>
 
         <div class="button-group">
-            <button id="checkBtn" class="btn btn-primary">检测</button>
-            <button id="clearBtn" class="btn btn-secondary">清空</button>
-            <button id="specialBtn" class="btn btn-secondary">特殊文件列表</button>
+            <button id="checkBtn" class="ws-btn ws-btn--primary" type="button" data-i18n="ws.btn.check">检测</button>
+            <!-- 清空是破坏性动作（会丢掉已输入的广播），走红：静止时同样安静，
+                 只在悬停/聚焦时转红提示 -->
+            <button id="clearBtn" class="ws-btn ws-btn--danger" type="button" data-i18n="ws.btn.clear">清空</button>
+            <button id="specialBtn" class="ws-btn ws-btn--quiet" type="button" data-i18n="ws.btn.special">特殊文件列表</button>
         </div>
 
         <div class="output-area">
-            <label>检测结果</label>
-            <div id="outputBox" class="output-box">
-                <span style="color: #5c6e8c;">等待检测...</span>
-            </div>
+            <label data-i18n="ws.resultLabel">检测结果</label>
+            <div id="outputBox" class="output-box" data-state="waiting" role="status" aria-live="polite"
+                 data-i18n-aria="ws.aria.results"><span class="placeholder" data-i18n="ws.resultWaiting">等待检测...</span></div>
         </div>
-        <div class="output-area" style="margin-top: 20px;">
-            <label>特殊音频文件</label>
-            <div id="specialOutput" class="output-box" style="min-height: 80px; max-height: 200px;">
-                <span style="color: #5c6e8c;">点击「特殊文件列表」查看</span>
-            </div>
+
+        <div class="output-area">
+            <label data-i18n="ws.specialLabel">特殊音频文件</label>
+            <div id="specialOutput" class="output-box" role="status" aria-live="polite"
+                 data-i18n-aria="ws.aria.special"><span class="placeholder" data-i18n="ws.specialHint">点击「特殊文件列表」查看</span></div>
         </div>
 
         <div class="status-bar">
-            <span class="count">词汇总数: <span id="wordCount">0</span></span>
-            <span class="count">已加载: <span id="loadedCount">0</span></span>
-            <span id="statusText" style="color: #5c6e8c;">就绪</span>
+            <span class="count" data-i18n-aria="ws.aria.counts"><span data-i18n="ws.count.words">词汇总数：</span><span id="wordCount">0</span></span>
+            <span class="count"><span data-i18n="ws.count.loaded">已加载：</span><span id="loadedCount">0</span></span>
+            <span id="statusText" data-state="ready" data-i18n="ws.status.ready" aria-live="polite"
+                  data-i18n-aria="ws.aria.status">就绪</span>
         </div>
     </div>
 
+    <script src="/static/i18n.js" defer></script>
+    <script src="/static/i18n-wordsearch.js" defer></script>
     <script>
         let wordList = [];
         let wordSet = new Set();
+
+        /* i18n 小包：动态文案走这里，切换语言时重新渲染一次 */
+        function t(key, vars) {
+            if (window.CASSIE_I18N && window.CASSIE_I18N.t) return window.CASSIE_I18N.t(key, vars);
+            return key;
+        }
+
+        function placeholderHtml(text, isError) {
+            return '<span class="placeholder' + (isError ? ' placeholder--error' : '') + '">' + text + '</span>';
+        }
+
+        function colorClassFor(result) {
+            if (!result) return 'word-error';
+            if (result.found) {
+                if (result.type === 'exact') {
+                    return 'word-found';
+                } else if (result.type === 'nato' || result.type === 'letter' || result.type === 'phrase') {
+                    return 'word-split';
+                } else if (['t_ed', 't_ed_split', 'ed', 'ish', 'like', 'prefix'].includes(result.type)) {
+                    return 'word-split';
+                } else if (['punctuation', 'mtf', 'glitch'].includes(result.type)) {
+                    return 'word-warning';
+                } else {
+                    return 'word-found';
+                }
+            }
+            return 'word-error';
+        }
+
+        /* 词条是英文，只有包装语言的部分（括号、箭头说明）需要翻译；
+           这里从原始结果重新拼出展示文本，不改动任何匹配结果。 */
+        function displayFor(result) {
+            if (!result) return '';
+            const text = result.display || '';
+            const arrow = text.indexOf(' \u2192 ');
+            const word = arrow >= 0 ? text.slice(0, arrow) : text;
+            const target = arrow >= 0 ? text.slice(arrow + 3) : '';
+            switch (result.type) {
+                case 'punctuation': return t('ws.match.punctuation', { word: word });
+                case 'glitch': return t('ws.match.glitch', { word: word });
+                case 'phrase': return t('ws.match.phrase', { word: word, target: target });
+                case 'phrase_missing': return t('ws.match.phraseMissing', { word: word });
+                case 'nato': return t('ws.match.nato', { word: word, target: target });
+                case 'letter': return t('ws.match.letter', { word: word, target: target });
+                case 't_ed': return t('ws.match.tEd', { word: word, target: target });
+                case 't_ed_split': return t('ws.match.tEdSplit', { word: word, target: target });
+                case 'ed': return t('ws.match.ed', { word: word, target: target });
+                case 'ish': return t('ws.match.ish', { word: word, target: target });
+                case 'like': return t('ws.match.like', { word: word, target: target });
+                case 'prefix': {
+                    const plus = target.indexOf(' + ');
+                    return t('ws.match.prefix', {
+                        word: word,
+                        prefix: plus >= 0 ? target.slice(0, plus) : '',
+                        target: plus >= 0 ? target.slice(plus + 3) : ''
+                    });
+                }
+                default: return text;
+            }
+        }
 
         function loadWordList() {
             const data = [
@@ -1328,7 +1122,7 @@
             wordSet = new Set(data);
             document.getElementById('wordCount').textContent = data.length;
             document.getElementById('loadedCount').textContent = data.length;
-            document.getElementById('statusText').textContent = '就绪';
+            document.getElementById('statusText').textContent = t('ws.status.ready');
         }
 
         const NATO_MAP = {
@@ -1341,22 +1135,27 @@
             'yankee': 'y', 'zulu': 'z'
         };
 
+        /* 注意：display 里只放**原始词条**，不要预先把「（标点）」这类说明拼进去。
+           这些说明由 displayFor() 按当前语言补上；两边都拼就会出现
+           「, （标点）（标点）」这样的重复标签。
+           带结构的类型（命中拆分）用 "词 → 目标" 的形式，
+           displayFor() 以 ' → ' 为分隔符还原成各个参数。 */
         function checkWord(word) {
-            if (['.', ',', '、'].includes(word)) {
-                return { found: true, type: 'punctuation', display: word + ' (标点)' };
+            if (['.', ',', '\u3001'].includes(word)) {
+                return { found: true, type: 'punctuation', display: word };
             }
             if (word === 'mtf') {
-                return { found: true, type: 'mtf', display: 'mtf → mobile task force' };
+                return { found: true, type: 'mtf', display: 'mtf \u2192 mobile task force' };
             }
             if (/^g[1-9]$/.test(word)) {
-                return { found: true, type: 'glitch', display: word + ' (故障音效)' };
+                return { found: true, type: 'glitch', display: word };
             }
             if (word.includes('+')) {
                 const phrase = word.replace(/\+/g, ' ');
                 if (wordSet.has(phrase)) {
-                    return { found: true, type: 'phrase', display: word + ' → ' + phrase };
+                    return { found: true, type: 'phrase', display: word + ' \u2192 ' + phrase };
                 }
-                return { found: false, type: 'phrase_missing', display: word + ' (短语未找到)' };
+                return { found: false, type: 'phrase_missing', display: word };
             }
             if (wordSet.has(word)) {
                 return { found: true, type: 'exact', display: word };
@@ -1364,40 +1163,43 @@
             if (word in NATO_MAP) {
                 const mapped = NATO_MAP[word];
                 if (wordSet.has(mapped)) {
-                    return { found: true, type: 'nato', display: word + ' → ' + mapped };
+                    return { found: true, type: 'nato', display: word + ' \u2192 ' + mapped };
                 }
             }
             if (/^[a-z]$/.test(word)) {
                 const prefixed = '_' + word;
                 if (wordSet.has(prefixed)) {
-                    return { found: true, type: 'letter', display: word + ' → ' + prefixed };
+                    return { found: true, type: 'letter', display: word + ' \u2192 ' + prefixed };
                 }
             }
+            /* 下面这些「词 → 词干」的 display 只放**结构**，后缀（+ t-ed / + -ish…）
+               由 displayFor() 按语言拼上。若这里也拼一遍，就会出现
+               「ableish → able + -ish + -ish」这种重复。 */
             if (word.endsWith('ted')) {
                 const stem = word.slice(0, -3);
                 if (wordSet.has(stem) && wordSet.has('t-ed')) {
-                    return { found: true, type: 't_ed', display: word + ' → ' + stem + ' + t-ed' };
+                    return { found: true, type: 't_ed', display: word + ' \u2192 ' + stem };
                 }
                 if (wordSet.has(stem) && wordSet.has('t') && wordSet.has('ed')) {
-                    return { found: true, type: 't_ed_split', display: word + ' → ' + stem + ' + t + ed' };
+                    return { found: true, type: 't_ed_split', display: word + ' \u2192 ' + stem };
                 }
             }
             if (word.endsWith('ed')) {
                 const stem = word.slice(0, -2);
                 if (wordSet.has(stem) && wordSet.has('-ed')) {
-                    return { found: true, type: 'ed', display: word + ' → ' + stem + ' + -ed' };
+                    return { found: true, type: 'ed', display: word + ' \u2192 ' + stem };
                 }
             }
             if (word.endsWith('ish')) {
                 const stem = word.slice(0, -3);
                 if (wordSet.has(stem) && wordSet.has('-ish')) {
-                    return { found: true, type: 'ish', display: word + ' → ' + stem + ' + -ish' };
+                    return { found: true, type: 'ish', display: word + ' \u2192 ' + stem };
                 }
             }
             if (word.endsWith('like')) {
                 const stem = word.slice(0, -4);
                 if (wordSet.has(stem) && wordSet.has('-like')) {
-                    return { found: true, type: 'like', display: word + ' → ' + stem + ' + -like' };
+                    return { found: true, type: 'like', display: word + ' \u2192 ' + stem };
                 }
             }
             const prefixes = ['anti', 'post', 'pre', 'pro', 'un'];
@@ -1406,7 +1208,7 @@
                     const stem = word.slice(pref.length);
                     const prefFile = pref + '-';
                     if (wordSet.has(prefFile) && wordSet.has(stem)) {
-                        return { found: true, type: 'prefix', display: word + ' → ' + prefFile + ' + ' + stem };
+                        return { found: true, type: 'prefix', display: word + ' \u2192 ' + prefFile + ' + ' + stem };
                     }
                 }
             }
@@ -1431,41 +1233,33 @@
             return { results, foundCount, missingCount, total: results.length };
         }
 
+        let lastResults = [];
+
         function renderResults(results, foundCount, missingCount, total) {
+            lastResults = results;
+            window.__cassieWordSearch = { lastResults: results };
             const output = document.getElementById('outputBox');
             if (total === 0) {
-                output.innerHTML = '<span style="color: #5c6e8c;">请输入内容</span>';
+                output.innerHTML = placeholderHtml(t('ws.resultEmpty'));
+                output.setAttribute('data-state', 'empty');
                 return;
             }
             let html = '';
             for (const r of results) {
-                let colorClass = '';
-                if (r.found) {
-                    if (r.type === 'exact') {
-                        colorClass = 'word-found';
-                    } else if (r.type === 'nato' || r.type === 'letter' || r.type === 'phrase') {
-                        colorClass = 'word-split';
-                    } else if (r.type === 't_ed' || r.type === 't_ed_split' || r.type === 'ed' || r.type === 'ish' || r.type === 'like' || r.type === 'prefix') {
-                        colorClass = 'word-split';
-                    } else if (r.type === 'punctuation' || r.type === 'mtf' || r.type === 'glitch') {
-                        colorClass = 'word-warning';
-                    } else {
-                        colorClass = 'word-found';
-                    }
-                } else {
-                    colorClass = 'word-error';
-                }
-                const displayText = r.display || r.text || '未知';
-                html += `<span class="${colorClass}">${displayText}</span> `;
+                html += `<span class="${colorClassFor(r)}">${displayFor(r)}</span> `;
             }
-            const summary = `<div style="margin-top: 12px; padding-top: 12px; border-top: 1px solid #1e222a; font-size: 12px; color: #5c6e8c;">
-                总计 <span style="color: #8e9aaf;">${total}</span> 个段，
-                找到 <span style="color: #67c23a;">${foundCount}</span> 个，
-                缺失 <span style="color: #ff7b72;">${missingCount}</span> 个
+            const summary = `<div class="result-summary">
+                <span class="result-summary__summary-total">${t('ws.summary.total', { count: total })}</span>
+                <span class="result-summary__summary-found">${t('ws.summary.found', { count: foundCount })}</span>
+                <span class="result-summary__summary-missing">${t('ws.summary.missing', { count: missingCount })}</span>
             </div>`;
             output.innerHTML = html + summary;
+            output.setAttribute('data-state', 'results');
+            /* 也记下数字，供 i18n-wordsearch.js 在切换语言时重画 */
+            output.setAttribute('data-total', String(total));
+            output.setAttribute('data-found', String(foundCount));
+            output.setAttribute('data-missing', String(missingCount));
         }
-
 
         function renderSpecialFiles() {
             const specialFiles = [];
@@ -1493,17 +1287,20 @@
 
             const output = document.getElementById('specialOutput');
             if (specialFiles.length === 0) {
-                output.innerHTML = '<span style="color: #5c6e8c;">没有找到特殊音频文件</span>';
+                output.innerHTML = placeholderHtml(t('ws.specialNone'));
+                output.setAttribute('data-state', 'empty');
                 return;
             }
 
             let html = '';
             for (const f of specialFiles) {
-                html += `<span style="display: inline-block; background-color: #1e222a; border-radius: 4px; padding: 2px 10px; margin: 4px 6px 4px 0; color: #79c0ff; font-family: monospace; font-size: 12px;">${f}</span>`;
+                html += `<span class="special-chip">${f}</span>`;
             }
-            // 顺便显示一下总数
-            html += `<div style="margin-top: 8px; color: #5c6e8c; font-size: 12px;">共 ${specialFiles.length} 个特殊文件</div>`;
+            /* 顺便显示一下总数 */
+            html += `<div class="special-total">${t('ws.summary.specialTotal', { count: specialFiles.length })}</div>`;
             output.innerHTML = html;
+            output.setAttribute('data-state', 'files');
+            output.setAttribute('data-count', String(specialFiles.length));
         }
 
         document.getElementById('specialBtn').addEventListener('click', function() {
@@ -1513,18 +1310,61 @@
         document.getElementById('checkBtn').addEventListener('click', function() {
             const text = document.getElementById('inputText').value;
             if (!text.trim()) {
-                document.getElementById('outputBox').innerHTML = '<span style="color: #ff7b72;">请输入广播内容</span>';
+                const output = document.getElementById('outputBox');
+                output.innerHTML = placeholderHtml(t('ws.resultNeedInput'), true);
+                output.setAttribute('data-state', 'error');
                 return;
             }
+            const status = document.getElementById('statusText');
+            status.textContent = t('ws.status.checking');
+            status.removeAttribute('data-i18n');
+            status.setAttribute('data-state', 'checking');
             const { results, foundCount, missingCount, total } = checkText(text);
             renderResults(results, foundCount, missingCount, total);
-            document.getElementById('statusText').textContent = '检测完成';
+            status.textContent = t('ws.status.done');
+            status.setAttribute('data-state', 'done');
         });
 
         document.getElementById('clearBtn').addEventListener('click', function() {
             document.getElementById('inputText').value = '';
-            document.getElementById('outputBox').innerHTML = '<span style="color: #5c6e8c;">等待检测...</span>';
-            document.getElementById('statusText').textContent = '已清空';
+            const output = document.getElementById('outputBox');
+            output.innerHTML = placeholderHtml(t('ws.resultWaiting'));
+            output.setAttribute('data-state', 'waiting');
+            const status = document.getElementById('statusText');
+            status.textContent = t('ws.status.cleared');
+            status.removeAttribute('data-i18n');
+            status.setAttribute('data-state', 'cleared');
+        });
+
+        /* 切换语言：静态文案由 i18n.js 刷，这里把动态渲染过的结果重画一次。
+           结果不重算，只重用上次的数组，所以切换语言不会改变任何检测结论。 */
+        window.addEventListener('cassie:langchange', function() {
+            const output = document.getElementById('outputBox');
+            const state = output.getAttribute('data-state');
+            if (state === 'results') {
+                renderResults(
+                    lastResults,
+                    parseInt(output.getAttribute('data-found'), 10) || 0,
+                    parseInt(output.getAttribute('data-missing'), 10) || 0,
+                    parseInt(output.getAttribute('data-total'), 10) || 0
+                );
+            } else if (state === 'waiting') {
+                output.innerHTML = placeholderHtml(t('ws.resultWaiting'));
+            } else if (state === 'empty') {
+                output.innerHTML = placeholderHtml(t('ws.resultEmpty'));
+            } else if (state === 'error') {
+                output.innerHTML = placeholderHtml(t('ws.resultNeedInput'), true);
+            }
+            const special = document.getElementById('specialOutput');
+            if (special.getAttribute('data-state') === 'files') {
+                renderSpecialFiles();
+            } else if (special.getAttribute('data-state') === 'empty') {
+                special.innerHTML = placeholderHtml(t('ws.specialNone'));
+            }
+            const status = document.getElementById('statusText');
+            if (status.getAttribute('data-state') !== 'ready') {
+                status.textContent = t('ws.status.' + status.getAttribute('data-state'));
+            }
         });
 
         loadWordList();

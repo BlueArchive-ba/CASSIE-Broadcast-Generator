@@ -1,0 +1,582 @@
+/* ==========================================================================
+   C.A.S.S.I.E. — 词汇检测工具（tools/word_search）版式
+   --------------------------------------------------------------------------
+   设计方向：**黑底 / 白字 / 灰只做发丝线 / 蓝红点缀**。
+
+     1. 令牌全部来自 glass.css（唯一权威来源），本文件**不重定向、不新增
+        任何颜色变量**：主色是黑 --bg，正文是白 --text；灰只出现在 1px
+        发丝线（--border*）与次要文字（--text-dim / --text-faint）上，
+        不做任何大面积灰底（上一版"低对比灰阶"的主按钮 #3f3f3f 已删除）。
+     2. 蓝 = 主操作 / 选中 / 链接 / 焦点；红 = 告警 / 错误 / 未命中 / 破坏性
+        操作。四种结果状态只用白 / 蓝 / 红，不引入第四种色相
+        （警告类走蓝不走 --warn 黄，理由见下方结果着色一段）。
+     3. 层次靠亮度阶梯（--bg → --surface → --surface-raised → --well）+
+        1px 发丝线，不用投影做浮起感；整份文件零模糊、零光斑、零径向渐变、
+        零胶囊、零正圆。
+     4. 圆角只用 --r-xs 2px / --r-sm 3px / --r-md 4px / --r-lg 6px。
+     5. 动效统一 --fast 0.16s + --ease；只有「检测中」一处很轻的呼吸。
+
+   结果着色（黑底高对比下四种状态必须一眼可分，只用白 / 蓝 / 红）：
+     .word-found   精确命中                  → --text 白，字重 500，无下划线
+     .word-split   拆分命中（nato/后缀/前缀）→ --blue-bright 蓝 + 实线下划线
+     .word-warning 警告（标点/故障音效/短语）→ --blue-bright 蓝 + 点线下划线
+                                              + --blue-soft 底，与上面拉开区别
+     .word-error   未命中                    → --red-bright 红 + 波浪下划线
+
+   为什么警告类用蓝而不是 --warn 黄：设计要求"只用白 / 蓝 / 红这几种"，
+   黄会是第四种色相。--warn 仍由 glass.css 原样保留（#f5c518），供测试功能
+   的警告弹窗使用，本文件不引用、也不改动它。
+
+   契约：被脚本引用的 id（inputText / checkBtn / clearBtn / specialBtn /
+   outputBox / specialOutput / statusText / wordCount / loadedCount）
+   与 data-i18n* 键名都由 index.html 与脚本决定，本文件只负责 .ws-* 类的观感。
+   ========================================================================== */
+
+/* --------------------------------------------------------------------------
+   1. 骨架
+   -------------------------------------------------------------------------- */
+body {
+    display: block;               /* 顶栏 + 卡片要能一起正常流式排布 */
+    padding: 72px 20px 44px;      /* 给 fixed 顶栏让位 */
+    background-color: var(--bg);  /* 主色：一块平整的近黑 */
+}
+
+/* 顶栏：黑底 + 一条 1px 发丝底描边（不用投影、不用渐变蒙版） */
+.topbar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 800;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 12px 20px;
+    background: var(--bg);
+    border-bottom: 1px solid var(--border-soft);
+    pointer-events: none;         /* 只有链接与切换控件本身可点 */
+}
+
+.topbar > * {
+    pointer-events: auto;
+}
+
+/* 「返回主页」：它是个链接，所以走蓝。静止时安静，悬停/聚焦才亮成蓝。 */
+.topbar__home {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    padding: 6px 12px;
+    border: 1px solid var(--border-soft);
+    border-radius: var(--r-sm);
+    background: transparent;
+    color: var(--text-soft);
+    font-size: 12px;
+    font-weight: 500;
+    letter-spacing: 0.3px;
+    text-decoration: none;
+    white-space: nowrap;
+    transition: color var(--fast) var(--ease), background-color var(--fast) var(--ease),
+        border-color var(--fast) var(--ease);
+}
+
+.topbar__home::before {
+    content: '\2190';             /* 细细一枚箭头，替代厚重图标 */
+    font-size: 12px;
+    opacity: 0.6;
+    transition: transform var(--fast) var(--ease), opacity var(--fast) var(--ease);
+}
+
+.topbar__home:hover {
+    background: var(--blue-soft);
+    border-color: var(--blue-line);
+    color: var(--blue-bright);
+}
+
+.topbar__home:hover::before {
+    opacity: 1;
+    transform: translateX(-2px);
+}
+
+.topbar__home:active {
+    background: var(--control-pressed);
+    color: var(--blue-bright);
+}
+
+.topbar__home:focus-visible {
+    outline: none;
+    box-shadow: var(--focus);     /* 焦点圈本来就是蓝的（--focus = --blue-soft） */
+}
+
+/* 语言切换控件的挂载点（控件本体由 glass.css 的 .lang-toggle 系列负责，
+   选中态是蓝 --toggle-active，本页不覆盖） */
+.lang-host {
+    display: inline-flex;
+    align-items: center;
+}
+
+/* 大容器：glass.css 的 .panel（黑面板：--surface + 1px --border-soft + --r-lg） */
+.container {
+    width: 900px;
+    max-width: 100%;
+    margin: 0 auto;
+    padding: 28px 32px 26px;
+}
+
+/* --------------------------------------------------------------------------
+   2. 页头 —— 白字是主角，副标题降一档白
+   -------------------------------------------------------------------------- */
+.header {
+    text-align: center;
+    margin-bottom: 24px;
+}
+
+.header h1 {
+    margin: 0 0 6px;
+    color: var(--text);
+    font-size: 24px;
+    font-weight: 600;
+    letter-spacing: 0.2px;
+    line-height: 1.3;
+}
+
+.header .subtitle {
+    color: var(--text-dim);
+    font-size: 12px;
+    font-family: var(--font-mono);
+    letter-spacing: 1.2px;
+}
+
+/* --------------------------------------------------------------------------
+   3. 输入区
+   -------------------------------------------------------------------------- */
+.input-area {
+    margin-bottom: 18px;
+}
+
+.input-area label,
+.output-area label {
+    display: block;
+    margin-bottom: 7px;
+    color: var(--text-dim);       /* 次要文字，不是灰块 */
+    font-size: 12px;
+    font-weight: 500;
+    letter-spacing: 0.3px;
+}
+
+/* 输入框：底/描边/聚焦态全部沿用 glass.css 的 token
+   （--well 内凹底 + --border 发丝描边 + 聚焦 --blue-line 描边 + --focus 蓝圈），
+   本页只调尺寸与行高。 */
+.input-area textarea {
+    width: 100%;
+    height: 140px;
+    padding: 12px 14px;
+    font-family: var(--font-mono);
+    font-size: 13px;
+    line-height: 1.6;
+    resize: vertical;
+}
+
+/* --------------------------------------------------------------------------
+   4. 按钮组 —— 蓝是主操作，红是破坏性动作
+   取值与 glass.css 的 .glass-btn 家族一致，只是换成这一页自己的 .ws-btn 类名
+   （页面 markup 里不出现 glass 这个类）。
+   -------------------------------------------------------------------------- */
+.button-group {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 22px;
+}
+
+.button-group .ws-btn {
+    flex: 1;
+    padding: 11px 16px;
+    font-size: 13.5px;
+}
+
+.ws-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 7px;
+    border: 1px solid var(--border);
+    border-radius: var(--r-sm);
+    background: var(--control);   /* #191919：黑阶梯的上沿，不是灰块 */
+    color: var(--text);
+    font-family: inherit;
+    font-size: 13px;
+    font-weight: 500;
+    letter-spacing: 0.2px;
+    cursor: pointer;
+    transition: background-color var(--fast) var(--ease), border-color var(--fast) var(--ease),
+        color var(--fast) var(--ease);
+}
+
+.ws-btn:hover {
+    background: var(--control-hover);
+    border-color: var(--border-strong);
+    color: var(--text);
+}
+
+.ws-btn:active {
+    background: var(--control-pressed);
+}
+
+.ws-btn:focus-visible {
+    outline: none;
+    box-shadow: var(--focus);
+}
+
+.ws-btn:disabled,
+.ws-btn[disabled] {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+/* 主按钮：蓝。深色底上要用提亮一档的蓝，直接把浅色模式的蓝搬过来会发闷 */
+.ws-btn--primary {
+    background: var(--accent);
+    border-color: var(--accent-bright);
+    color: #fff;
+    font-weight: 600;
+}
+
+.ws-btn--primary:hover {
+    background: var(--accent-bright);
+    border-color: var(--accent-bright);
+    color: #fff;
+}
+
+.ws-btn--primary:active {
+    background: var(--blue);
+    border-color: var(--blue-bright);
+    color: #fff;
+}
+
+/* 次要按钮：几乎没有底，只有一条发丝描边 */
+.ws-btn--quiet {
+    background: transparent;
+    border-color: var(--border-soft);
+    color: var(--text-soft);
+}
+
+.ws-btn--quiet:hover {
+    background: var(--control);
+    border-color: var(--border);
+    color: var(--text);
+}
+
+/* 破坏性动作（清空输入）：静止时与次要按钮一样安静，
+   只有悬停/聚焦时才用红提示"这一步会清掉你写的东西" */
+.ws-btn--danger {
+    background: transparent;
+    border-color: var(--border-soft);
+    color: var(--text-soft);
+}
+
+.ws-btn--danger:hover {
+    background: var(--danger-soft);
+    border-color: var(--danger);
+    color: var(--danger-bright);
+}
+
+.ws-btn--danger:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 2px var(--danger-soft);
+}
+
+/* --------------------------------------------------------------------------
+   5. 结果面板 —— 内凹的 --well + 1px 发丝描边（无投影，保持平）
+   这一块是全页唯一"大面积"的填充，而它比底色 --bg 还深，不是灰底。
+   -------------------------------------------------------------------------- */
+.output-area + .output-area {
+    margin-top: 20px;
+}
+
+.output-box {
+    position: relative;
+    background: var(--well);
+    border: 1px solid var(--border);
+    border-radius: var(--r-md);
+    padding: 14px 16px;
+    min-height: 200px;
+    max-height: 400px;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    color: var(--text-soft);
+    font-family: var(--font-mono);
+    font-size: 13px;
+    line-height: 1.85;
+    word-break: break-word;
+    transition: border-color var(--fast) var(--ease);
+}
+
+#specialOutput {
+    min-height: 80px;
+    max-height: 220px;
+}
+
+/* 出错时描边转红：这是本页"红=错误"的主要落点之一 */
+.output-box[data-state='results'] {
+    border-color: var(--border);
+}
+
+.output-box[data-state='error'] {
+    border-color: var(--danger-line);
+}
+
+/* 空状态 / 提示：界面字 + 最暗一档白，和词条本身区分开 */
+.output-box .placeholder {
+    color: var(--text-faint);
+    font-family: var(--font-ui);
+    font-size: 13px;
+}
+
+.output-box .placeholder--error {
+    color: var(--danger-bright);
+}
+
+/* ---- 逐词定位结果的着色（类名由页面脚本给出，规则一一对应） ----
+   纯黑底 + 高对比下，四种状态靠「颜色 + 下划线线型 + 字重/底色」区分，
+   只用白 / 蓝 / 红：
+     1 精确命中  --text        白，字重 500，无下划线
+     2 拆分命中  --blue-bright 蓝，实线下划线
+     3 警告      --blue-bright 蓝，点线下划线 + --blue-soft 淡蓝底（可点的"标记"感）
+     4 未命中    --red-bright  红，波浪下划线                            */
+.output-box .word-normal {
+    color: var(--text-soft);
+}
+
+.output-box .word-found {
+    color: var(--text);
+    font-weight: 500;
+}
+
+.output-box .word-split {
+    color: var(--blue-bright);
+    text-decoration: underline;
+    text-decoration-color: var(--blue-line);
+    text-decoration-thickness: 1px;
+    text-underline-offset: 2px;
+}
+
+.output-box .word-warning {
+    color: var(--blue-bright);
+    background: var(--blue-soft);
+    border-radius: var(--r-xs);
+    text-decoration: underline dotted;
+    text-decoration-color: var(--blue-line);
+    text-decoration-thickness: 1px;
+    text-underline-offset: 2px;
+}
+
+.output-box .word-error {
+    color: var(--red-bright);
+    text-decoration: underline wavy;
+    text-decoration-color: var(--red-line);
+    text-decoration-thickness: 1px;
+    text-underline-offset: 2px;
+}
+
+/* ---- 命中关键词的高亮：低透明蓝底 + 白字，绝不用默认刺眼黄 ---- */
+.output-box mark,
+mark {
+    background: var(--blue-soft);
+    border-radius: var(--r-xs);
+    padding: 0 3px;
+    color: var(--text);
+}
+
+/* 词条之间留一点呼吸；悬停时用一层淡蓝标出"这是你指着的那一个词" */
+.output-box > span {
+    padding: 1px 2px;
+    border-radius: var(--r-xs);
+    transition: background-color var(--fast) var(--ease);
+}
+
+.output-box > span:hover {
+    background: var(--blue-soft);
+}
+
+/* ---- 底部汇总条：一条发丝分隔线 + 白/红对读 ---- */
+.result-summary {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px 14px;
+    margin-top: 14px;
+    padding-top: 11px;
+    border-top: 1px solid var(--border-soft);
+    font-family: var(--font-ui);
+    font-size: 12px;
+    color: var(--text-dim);
+}
+
+.result-summary__summary-total { color: var(--text-soft); }
+.result-summary__summary-found { color: var(--ok); }              /* 白 */
+.result-summary__summary-missing { color: var(--danger-bright); } /* 红 */
+
+/* ---- 特殊音频文件：黑标签 + 发丝描边，悬停转蓝 ---- */
+.special-chip {
+    display: inline-block;
+    margin: 0 6px 6px 0;
+    padding: 3px 9px;
+    background: var(--surface-raised);
+    border: 1px solid var(--border-soft);
+    border-radius: var(--r-sm);
+    color: var(--text-soft);
+    font-family: var(--font-mono);
+    font-size: 12px;
+    line-height: 1.6;
+    transition: background-color var(--fast) var(--ease), border-color var(--fast) var(--ease),
+        color var(--fast) var(--ease);
+}
+
+.special-chip:hover {
+    background: var(--blue-soft);
+    border-color: var(--blue-line);
+    color: var(--text);
+}
+
+.special-total {
+    display: block;
+    margin-top: 10px;
+    color: var(--text-dim);
+    font-family: var(--font-ui);
+    font-size: 12px;
+}
+
+/* --------------------------------------------------------------------------
+   6. 状态栏 —— 黑条 + 发丝描边；状态本身用蓝（进行中）/ 白（完成）
+   -------------------------------------------------------------------------- */
+.status-bar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px 16px;
+    margin-top: 18px;
+    padding: 10px 14px;
+    background: var(--surface-raised);
+    border: 1px solid var(--border-soft);
+    border-radius: var(--r-md);
+    color: var(--text-dim);
+    font-family: var(--font-mono);
+    font-size: 12px;
+}
+
+.status-bar .count {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 6px;
+    color: var(--text-dim);
+}
+
+/* 数字是信息主体，给到白；标签留在 --text-dim */
+#wordCount,
+#loadedCount {
+    color: var(--text);
+    font-size: 12.5px;
+    font-weight: 600;
+}
+
+#statusText {
+    color: var(--text-soft);
+    border-radius: var(--r-xs);
+    padding: 1px 6px;
+    transition: color var(--fast) var(--ease), background-color var(--fast) var(--ease),
+        box-shadow var(--fast) var(--ease);
+}
+
+#statusText[data-state='ready'] {
+    color: var(--text-soft);
+    background: transparent;
+    box-shadow: none;
+}
+
+/* 进行中 = 蓝，这是"蓝做 UI"的落点之一 */
+#statusText[data-state='checking'] {
+    color: var(--blue-bright);
+    background: var(--blue-soft);
+    box-shadow: inset 0 0 0 1px var(--blue-line);
+    animation: wsPulse 1.4s var(--ease) infinite;
+}
+
+/* 完成 = 白，只用一条发丝内环，不抢结果面板 */
+#statusText[data-state='done'] {
+    color: var(--ok);
+    background: transparent;
+    box-shadow: inset 0 0 0 1px var(--border);
+}
+
+#statusText[data-state='cleared'] {
+    color: var(--text-dim);
+}
+
+/* --------------------------------------------------------------------------
+   7. 动效：只有「检测中」一次很轻的透明度呼吸
+   —— 入场动画在本页全部取消，黑底高对比不需要"跳出来"
+   -------------------------------------------------------------------------- */
+@keyframes wsPulse {
+    0%, 100% { opacity: 1; }
+    50%      { opacity: 0.62; }
+}
+
+/* --------------------------------------------------------------------------
+   8. 语言切换控件
+   选中态的蓝底由 glass.css 的 --toggle-active 给出，本页不覆盖
+   -------------------------------------------------------------------------- */
+
+/* --------------------------------------------------------------------------
+   9. 移动端
+   -------------------------------------------------------------------------- */
+@media (max-width: 640px) {
+    body {
+        padding: 66px 12px 28px;
+    }
+
+    .topbar {
+        padding: 10px 12px;
+    }
+
+    .container {
+        padding: 20px 16px 18px;
+        border-radius: var(--r-md);
+    }
+
+    .header h1 {
+        font-size: 19px;
+    }
+
+    .header .subtitle {
+        font-size: 11.5px;
+        letter-spacing: 1px;
+    }
+
+    .button-group {
+        flex-direction: column;
+    }
+
+    .button-group .ws-btn {
+        width: 100%;
+    }
+
+    .input-area textarea {
+        height: 110px;
+    }
+
+    .output-box {
+        min-height: 150px;
+        max-height: 320px;
+        padding: 13px 14px;
+        font-size: 12px;
+    }
+
+    #specialOutput {
+        max-height: 180px;
+    }
+
+    .lang-toggle__option {
+        padding: 6px 12px;
+    }
+}

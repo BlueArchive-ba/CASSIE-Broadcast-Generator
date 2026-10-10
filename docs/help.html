@@ -3,20 +3,148 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>C.A.S.S.I.E. 使用帮助</title>
-<style>
-:root{color-scheme:dark;--bg:#101419;--panel:#171d24;--panel2:#1b222a;--line:#303944;--text:#c2cad3;--muted:#89939f;--accent:#83b7dc}
-*{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;background:var(--bg);color:var(--text);font:15px/1.8 system-ui,"Microsoft YaHei",sans-serif}main{max-width:900px;margin:auto;padding:48px 24px 72px}.hero{padding-bottom:28px;border-bottom:1px solid var(--line);animation:rise .55s ease both}.hero h1{margin:0;color:#e0e5ea;font-size:30px;font-weight:500}.hero p{margin:6px 0;color:var(--muted)}nav{display:flex;flex-wrap:wrap;gap:8px;margin:24px 0 30px}nav a,.back{color:var(--accent);border:1px solid var(--line);padding:4px 11px;text-decoration:none;font-size:13px;border-radius:3px;transition:background .2s,border-color .2s}nav a:hover,.back:hover{background:var(--panel2);border-color:#55718a}.section{padding:22px 24px;margin-bottom:16px;background:var(--panel);border:1px solid var(--line);border-radius:4px;animation:rise .5s ease both}.section h2{margin:0 0 12px;color:#d4dbe2;font-size:20px;font-weight:500}.section h3{margin:20px 0 4px;color:#b2c5d5;font-size:16px;font-weight:500}.section p{margin:7px 0}.section ul{margin:8px 0;padding-left:22px}.code{display:block;margin:10px 0;padding:12px 14px;background:#11161b;border-left:2px solid #607e96;color:#b8c9d8;font:13px/1.7 ui-monospace,Consolas,monospace;white-space:pre-wrap;overflow:auto}.note{color:var(--muted);font-size:13px}.back{display:inline-block;margin-top:12px}@keyframes rise{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}@media(max-width:600px){main{padding:28px 14px 48px}.section{padding:18px 16px}.hero h1{font-size:25px}}
-</style>
+<title data-i18n="help.title">C.A.S.S.I.E. 使用帮助</title>
+<link rel="stylesheet" href="/static/glass.css?v=20261108-1">
+<link rel="stylesheet" href="/static/docs.css?v=20261108-1">
 </head>
-<body><main>
-<header class="hero"><h1>C.A.S.S.I.E. 广播生成器</h1><p>普通用户使用帮助</p></header>
-<nav><a href="#start">开始使用</a><a href="#input">输入规则</a><a href="#commands">指令</a><a href="#options">选项</a><a href="#preset">预设</a><a href="#faq">常见问题</a></nav>
-<section class="section" id="start"><h2>开始使用</h2><p>运行项目目录中的 <code>python cassie_play.py</code>，然后打开 <code>http://localhost:8080/cassie_play</code>。</p><p>首次运行前建议执行 <code>python diagnostic.py</code> 检查依赖、ffmpeg 和音频素材。</p><p>输入内容后可选择“播放广播”试听，或选择“导出WAV”生成文件。播放和导出不能同时进行。</p></section>
-<section class="section" id="input"><h2>输入规则</h2><ul><li>单词之间用空格分隔；句号、逗号和顿号建议前后留空格。</li><li>系统会自动转为小写，并按照本地 WAV 文件名查找音频。</li><li>单个字母会查找 <code>_a.wav</code> 这类文件；<code>alpha</code> 等北约音标会映射到字母音频。</li><li>开启“数字朗读”后，整数和小数会按英语数字短语读取；关闭时数字按逐位读取。</li></ul><p>可从主界面的“单词查找”打开素材搜索工具，快速确认可用音频文件名。</p><span class="code">attention , all personnel .
-mtf epsilon 11</span></section>
-<section class="section" id="commands"><h2>广播指令</h2><h3>局部指令</h3><ul><li><code>[stutter:n]word</code>：重复单词开头音频 n 次；也可写 <code>[stutter:n,false]word</code>，只播放卡顿片段，不播放完整单词。</li><li><code>[speed:n]word</code>：设置当前单词音高倍率，范围 0.1 到 10。</li></ul><h3>全局与时间指令</h3><ul><li><code>[speed_all:n]</code>：设置后续单词音高倍率。</li><li><code>[gap:n]</code>：在指令所在位置插入 n 秒等待；n 必须是大于等于 0 的数字。</li><li><code>.</code>、<code>,</code>、<code>、</code>：分别插入 0.5、0.2、0.1 秒停顿。</li><li><code>[channel:n]</code>：切换后续正文声道，n 为 1 到 8；<code>[channel:stop]</code> 恢复默认声道。</li><li><code>[error:n]</code>：从后续正文中随机选择 n 个单词，插入故障音或卡顿；n 为 0 时不插入错误效果。</li></ul><h3>快捷广播</h3><ul><li><code>mtf</code>：展开为 mobile task force。</li><li><code>[cd:start,end,separator]</code>：生成从 start 到 end 的递增或递减数字序列；separator 可选，默认使用句号停顿。生成的数字仍需对应的数字音频，建议开启数字朗读。</li><li><code>[mtf:word1,number1,word2,number2,scp_count]</code>：生成 MTF 入场广播，数字参数必须为正整数。</li><li><code>[backup:word]</code>：生成支援单位广播。</li><li><code>[warhead:number,start]</code>：生成核弹开始倒计时广播。</li><li><code>[warhead:number,resume]</code>：生成核弹恢复倒计时广播。</li><li><code>[warhead:any,cancelled]</code>：生成核弹取消广播，取消模式不使用倒计时。</li><li><code>[hostile_enter:number,word1,word2,word3]</code>：生成敌对目标进入广播；四个参数都必须填写。</li><li><code>[alert:id,once]</code>：播放一次警报；<code>[alert:id,loop]</code>：循环播放警报；<code>[alert:none]</code>：停止警报。</li></ul><p class="note">指令必须使用英文半角方括号和逗号。错误参数会显示在终端中，并从广播文本中移除。<br>快捷广播里的内容可以嵌套指令</p></section>
-<section class="section" id="options"><h2>界面选项</h2><ul><li>“广播铃声”启用普通背景铃声；“特殊铃声”启用开始和结束铃声。</li><li>高级设置可选择 <code>bell_start.wav</code>、<code>bell_end.wav</code> 或 words 目录中的 <code>ic_start.wav</code>、<code>ic_stop.wav</code>。</li><li>音高控制播放音高；语速为正数时增加单词之间的间隔，为负数时按比例裁剪首尾静音。</li><li>“广播空间效果”可调整滤波、压缩、混响、噪声和高音延长。</li><li>点击“监听系统音频”可共享屏幕或窗口声音。浏览器通常要求在共享对话框中勾选“共享音频”。</li></ul><p class="note">网页无法直接读取操作系统输出设备；系统声音监听依赖浏览器的屏幕音频共享权限。</p></section>
-<section class="section" id="preset"><h2>预设管理</h2><p>打开“预设管理”后可以保存、加载、删除和导入广播文本。数据保存在项目根目录的 <code>presets.json</code> 中。</p></section>
-<section class="section" id="faq"><h2>常见问题</h2><h3>提示“未找到”</h3><p>检查 <code>cassie/words/</code> 是否存在对应的 WAV 文件，或使用“单词查找”页面确认文件名。</p><h3>没有声音</h3><p>检查系统输出设备、pygame 初始化和 WAV 文件；运行诊断工具确认依赖与 ffmpeg。</p><h3>浏览器不允许自动监听系统声音</h3><p>这是浏览器的权限限制。点击监听按钮后重新选择共享窗口，并勾选共享音频。</p><h3>如何修改端口</h3><p>修改 <code>cassie_play.py</code> 最后一行的 <code>port=8080</code>，然后重启服务。</p><a class="back" href="/cassie_play">返回广播生成器</a> <a class="back" href="/developer">开发者技术文档</a></section>
-</main></body></html>
+<body><main class="doc">
+
+<header class="hero panel">
+<h1 data-i18n="help.h1">C.A.S.S.I.E. 广播生成器</h1>
+<p data-i18n="help.subtitle">普通用户使用帮助</p>
+</header>
+
+<nav>
+<a href="#start" data-i18n="help.nav.start">开始使用</a>
+<a href="#input" data-i18n="help.nav.input">输入规则</a>
+<a href="#commands" data-i18n="help.nav.commands">指令</a>
+<a href="#options" data-i18n="help.nav.options">选项</a>
+<a href="#preset" data-i18n="help.nav.preset">预设</a>
+<a href="#faq" data-i18n="help.nav.faq">常见问题</a>
+<a href="/word-search" data-i18n="nav.wordSearch">单词查找</a>
+</nav>
+
+<section class="section panel" id="start">
+<h2 data-i18n="help.start.h2">开始使用</h2>
+<p data-i18n-html="help.start.p1">运行项目目录中的 <code>python cassie_play.py</code>，然后打开 <code>http://localhost:8080/cassie_play</code>。</p>
+<p data-i18n-html="help.start.p2">首次运行前建议执行 <code>python diagnostic.py</code> 检查依赖、ffmpeg 和音频素材。</p>
+<p data-i18n="help.start.p3">输入内容后可选择“播放广播”试听，或选择“导出WAV”生成文件。播放和导出不能同时进行。</p>
+</section>
+
+<section class="section panel" id="input">
+<h2 data-i18n="help.input.h2">输入规则</h2>
+<ul>
+<li data-i18n="help.input.li1">单词之间用空格分隔；句号、逗号和顿号前后需要留有空格。</li>
+<li data-i18n="help.input.li2">系统会自动转为小写，并按照本地 WAV 文件名查找音频。</li>
+<li data-i18n="help.input.li3">开启“数字朗读”后，整数和小数会按英语数字短语读取；关闭时数字按逐位读取。</li>
+</ul>
+<p data-i18n="help.input.p">可从主界面的“单词查找”打开素材搜索工具，快速确认可用音频文件名。</p>
+<span class="code">attention , all personnel .
+mtf epsilon 11</span>
+</section>
+
+<section class="section panel" id="commands">
+<h2 data-i18n="help.commands.h2">广播指令</h2>
+<h3 data-i18n="help.commands.local.h3">局部指令</h3>
+<ul>
+<li data-i18n-html="help.commands.local.li1"><code>[stutter:n]word</code>：重复单词开头音频 n 次；也可写 <code>[stutter:n,false]word</code>，只播放卡顿片段，不播放完整单词。</li>
+<li data-i18n-html="help.commands.local.li2"><code>[speed:n]word</code>：设置当前单词音高倍率，范围 0.1 到 10。</li>
+</ul>
+<h3 data-i18n="help.commands.global.h3">全局与时间指令</h3>
+<ul>
+<li data-i18n-html="help.commands.global.li1"><code>[speed_all:n]</code>：设置后续单词音高倍率。</li>
+<li data-i18n-html="help.commands.global.li2"><code>[gap:n]</code>：在指令所在位置插入 n 秒等待；n 必须是大于等于 0 的数字。</li>
+<li data-i18n-html="help.commands.global.li3"><code>.</code>、<code>,</code>、<code>、</code>：分别插入 1.0、0.7、0.6 秒停顿。</li>
+<li data-i18n-html="help.commands.global.li4"><code>[channel:n]</code>：切换后续正文声道，n 为 1 到 8；<code>[channel:stop]</code> 恢复默认声道。</li>
+<li data-i18n-html="help.commands.global.li5"><code>[error:n]</code>：从后续正文中随机选择 n 个单词，插入故障音或卡顿；n 为 0 时不插入错误效果。</li>
+<li data-i18n-html="help.commands.global.li6"><code>[preset:名字]</code>：嵌入已保存的预设内容，可以嵌套引用；出现循环引用时会报错。</li>
+</ul>
+<h3 data-i18n="help.commands.quick.h3">快捷广播</h3>
+<ul>
+<li data-i18n-html="help.commands.quick.li1"><code>mtf</code>：展开为 mobile task force。</li>
+<li data-i18n-html="help.commands.quick.li2"><code>[cd:start,end,separator]</code>：生成从 start 到 end 的递增或递减数字序列；separator 可选，默认使用句号停顿。生成的数字仍需对应的数字音频，建议开启数字朗读。</li>
+<li data-i18n-html="help.commands.quick.li3"><code>[mtf:word1,number1,word2,number2,scp_count]</code>：生成 MTF 入场广播，数字参数必须为正整数。</li>
+<li data-i18n-html="help.commands.quick.li4"><code>[backup:word]</code>：生成支援单位广播。</li>
+<li data-i18n-html="help.commands.quick.li5"><code>[warhead:number,start]</code>：生成核弹开始倒计时广播。</li>
+<li data-i18n-html="help.commands.quick.li6"><code>[warhead:number,resume]</code>：生成核弹恢复倒计时广播。</li>
+<li data-i18n-html="help.commands.quick.li7"><code>[warhead:any,cancelled]</code>：生成核弹取消广播，取消模式不使用倒计时。</li>
+<li data-i18n-html="help.commands.quick.li8"><code>[hostile_enter:number,word1,word2,word3]</code>：生成敌对目标进入广播；四个参数都必须填写。</li>
+</ul>
+<p class="note" data-i18n-html="help.commands.note">指令必须使用英文半角方括号和逗号。错误参数会显示在终端中，并从广播文本中移除。<br>快捷广播里的内容可以嵌套指令</p>
+</section>
+
+<section class="section panel" id="commands-2">
+<h2 data-i18n="help.commands.h2">广播指令</h2>
+<h3 data-i18n="help.commands.local.h3">局部指令</h3>
+<ul>
+<li data-i18n-html="help.commands.local.li1"><code>[stutter:n]word</code>：重复单词开头音频 n 次；也可写 <code>[stutter:n,false]word</code>，只播放卡顿片段，不播放完整单词。</li>
+<li data-i18n-html="help.commands.local.li2"><code>[speed:n]word</code>：设置当前单词音高倍率，范围 0.1 到 10。</li>
+</ul>
+<h3 data-i18n="help.commands.global.h3">全局与时间指令</h3>
+<ul>
+<li data-i18n-html="help.commands.global.li1"><code>[speed_all:n]</code>：设置后续单词音高倍率。</li>
+<li data-i18n-html="help.commands.global.li2"><code>[gap:n]</code>：在指令所在位置插入 n 秒等待；n 必须是大于等于 0 的数字。</li>
+<li data-i18n-html="help.commands.global.li3"><code>.</code>、<code>,</code>、<code>、</code>：分别插入 1.0、0.7、0.6 秒停顿。</li>
+<li data-i18n-html="help.commands.global.li4"><code>[channel:n]</code>：切换后续正文声道，n 为 1 到 8；<code>[channel:stop]</code> 恢复默认声道。</li>
+<li data-i18n-html="help.commands.global.li5"><code>[error:n]</code>：从后续正文中随机选择 n 个单词，插入故障音或卡顿；n 为 0 时不插入错误效果。</li>
+<li data-i18n-html="help.commands.global.li6"><code>[preset:名字]</code>：嵌入已保存的预设内容，可以嵌套引用；出现循环引用时会报错。</li>
+</ul>
+<h3 data-i18n="help.commands.quick.h3">快捷广播</h3>
+<ul>
+<li data-i18n-html="help.commands.quick.li1"><code>mtf</code>：展开为 mobile task force。</li>
+<li data-i18n-html="help.commands.quick.li2"><code>[cd:start,end,separator]</code>：生成从 start 到 end 的递增或递减数字序列；separator 可选，默认使用句号停顿。生成的数字仍需对应的数字音频，建议开启数字朗读。</li>
+<li data-i18n-html="help.commands.quick.li3"><code>[mtf:word1,number1,word2,number2,scp_count]</code>：生成 MTF 入场广播，数字参数必须为正整数。</li>
+<li data-i18n-html="help.commands.quick.li4"><code>[backup:word]</code>：生成支援单位广播。</li>
+<li data-i18n-html="help.commands.quick.li5"><code>[warhead:number,start]</code>：生成核弹开始倒计时广播。</li>
+<li data-i18n-html="help.commands.quick.li6"><code>[warhead:number,resume]</code>：生成核弹恢复倒计时广播。</li>
+<li data-i18n-html="help.commands.quick.li7"><code>[warhead:any,cancelled]</code>：生成核弹取消广播，取消模式不使用倒计时。</li>
+<li data-i18n-html="help.commands.quick.li8"><code>[hostile_enter:number,word1,word2,word3]</code>：生成敌对目标进入广播；四个参数都必须填写。</li>
+</ul>
+<p data-i18n-html="help.commands.p"><code>[channl:+0.125] mtf [speed_all:0.8] mtf [channl:stop]</code>：将区块内容发送到空闲声道；最多支持三位小数，正数延后、负数提前，以区块在主序列中的位置为偏移基准。区块内可以继续使用其他指令。</p>
+<p class="note" data-i18n-html="help.commands.note2">指令必须使用英文半角方括号和逗号。错误参数会显示在终端中，并从广播文本中移除。<br>快捷广播里的内容可以嵌套指令</p>
+</section>
+
+<section class="section panel" id="options">
+<h2 data-i18n="help.options.h2">界面选项</h2>
+<ul>
+<li data-i18n="help.options.li1">“广播铃声”启用普通背景铃声；“特殊铃声”启用开始和结束铃声。</li>
+<li data-i18n-html="help.options.li2">高级设置可选择 <code>bell_start.wav</code>、<code>bell_end.wav</code> 或 words 目录中的 <code>ic_start.wav</code>、<code>ic_stop.wav</code>。</li>
+<li data-i18n="help.options.li3">音高控制播放音高；语速为正数时增加单词之间的间隔，为负数时按比例裁剪首尾静音。</li>
+<li data-i18n="help.options.li4">“广播空间效果”可调整滤波、压缩、走廊混响、高频尾音和噪声。</li>
+<li data-i18n="help.options.li5">“走廊混响”用反馈延迟网络模拟长走廊：预延迟决定直达声与第一次反射的间隔，走廊尺度决定反射间距，混响时长（RT60）是拖尾衰减 60 dB 所需的时间；“高频吸收”控制高频相对低频的消散速度，“尾音亮度”控制拖尾里高频的占比。</li>
+<li data-i18n="help.options.li6">点击“监听系统音频”可共享屏幕或窗口声音。浏览器通常要求在共享对话框中勾选“共享音频”。</li>
+<li data-i18n-html="help.options.li7">状态栏上方的进度条显示当前合成进度：“应用空间效果”是耗时最长的一步。空间效果越弱（“减少耗时”档位越高）或改用整句处理，这一步越快；没有在合成时进度条显示“就绪”。</li>
+</ul>
+<p class="note" data-i18n="help.options.note">网页无法直接读取操作系统输出设备；系统声音监听依赖浏览器的屏幕音频共享权限。</p>
+</section>
+
+<section class="section panel" id="preset">
+<h2 data-i18n="help.preset.h2">预设管理</h2>
+<p data-i18n-html="help.preset.p">打开“预设管理”后可以保存、加载、删除和导入广播文本。数据保存在项目根目录的 <code>presets.json</code> 中。</p>
+<p data-i18n-html="help.preset.p2">广播文本里可以写 <code>[preset:名字]</code> 直接嵌入某个预设的内容，例如 <code>[preset:入场] mtf epsilon 11</code>。预设之间可以互相引用；若出现循环引用（A 引用 B、B 又引用 A），程序会报错并停止展开，不会卡住。</p>
+</section>
+
+<section class="section panel" id="faq">
+<h2 data-i18n="help.faq.h2">常见问题</h2>
+<h3 data-i18n="help.faq.q1">提示“未找到”</h3>
+<p data-i18n-html="help.faq.a1">检查 <code>cassie/words/</code> 是否存在对应的 WAV 文件，或使用“单词查找”页面确认文件名。</p>
+<h3 data-i18n="help.faq.q2">没有声音</h3>
+<p data-i18n="help.faq.a2">检查系统输出设备、pygame 初始化和 WAV 文件；运行诊断工具确认依赖与 ffmpeg。</p>
+<h3 data-i18n="help.faq.q3">浏览器不允许自动监听系统声音</h3>
+<p data-i18n="help.faq.a3">这是浏览器的权限限制。点击监听按钮后重新选择共享窗口，并勾选共享音频。</p>
+<h3 data-i18n="help.faq.q4">如何修改端口</h3>
+<p data-i18n-html="help.faq.a4">修改 <code>cassie_play.py</code> 最后一行的 <code>port=8080</code>，然后重启服务。</p>
+<h3 data-i18n="help.faq.q5">进度条看起来没动</h3>
+<p data-i18n-html="help.faq.a5">关掉“广播空间效果”时整条合成往往只要几十毫秒，进度条很快走完，看起来像没动。开启空间效果后“应用空间效果”那一步通常要一到几秒，这时会明显推进。改过后端代码要重启 <code>python cassie_play.py</code>；只改了前端则按一次 <code>Ctrl+F5</code>。</p>
+</section>
+
+<footer class="foot panel">
+<a class="back" href="/cassie_play" data-i18n="common.backApp">返回广播生成器</a>
+<span class="foot__spacer"></span>
+<a class="back" href="/developer" data-i18n="help.foot.dev">开发者技术文档</a>
+</footer>
+
+</main>
+<script src="/static/i18n.js" defer></script>
+<script src="/static/i18n-docs.js" defer></script>
+</body></html>
