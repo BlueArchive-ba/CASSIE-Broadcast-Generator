@@ -19,7 +19,9 @@ from rich.prompt import Confirm, Prompt
 from rich.text import Text
 from rich import box
 
-GITHUB_URL = "https://github.com/BlueArchive-ba/CASSIE/releases/download/v1.3.0/cassie.zip"
+# 素材仓库 BlueArchive-ba/CASSIE 的发布 tag。注意是 0.1，不是 v1.x：
+# 仓库里另有 v1.3.0 这个 tag，但它没有挂 Release，用它拼出的下载地址会 404。
+GITHUB_URL = "https://github.com/BlueArchive-ba/CASSIE/releases/download/0.1/cassie.zip"
 MIRROR_PREFIX = "https://gh-proxy.com/"
 DEFAULT_THREADS = 16
 MIN_THREADS = 4
