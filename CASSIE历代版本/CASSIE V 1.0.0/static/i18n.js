@@ -1,4 +1,4 @@
-/* C.A.S.S.I.E. — 中英切换引擎（i18n core） */
+
 (function (root) {
     'use strict';
 
@@ -221,9 +221,7 @@
     }
 
     function init() {
-        // ?lang= 是显式要求，优先级最高，并且记下来；
-        // 而「按浏览器语言猜出来」的结果不写盘——那不算用户的决定，
-        // 否则用户换了系统语言、界面却还停在旧语言上。
+        
         var forced = readUrlLang();
         current = forced || detect();
         if (forced) writeStored(forced);

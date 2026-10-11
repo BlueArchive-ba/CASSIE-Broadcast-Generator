@@ -15,18 +15,14 @@ from rich import box
 PROJECT_BASE_PATH = os.path.dirname(os.path.abspath(__file__))
 console = Console()
 
-
 def print_section(title):
     console.rule(f"[bold cyan]{title}[/bold cyan]")
-
 
 def print_subsection(title):
     console.print(f"\n[bold]{title}[/bold]")
 
-
 def ask_yes_no(prompt):
     return Confirm.ask(f"[bold]{prompt}[/bold]")
-
 
 def run_command(cmd, description):
     console.print(f"  [dim]执行:[/dim] {cmd}")
@@ -37,7 +33,6 @@ def run_command(cmd, description):
     except subprocess.CalledProcessError:
         console.print(f"  {description} [red]失败[/red]")
         return False
-
 
 def pip_install(package_name):
     pip_cmd = [sys.executable, '-m', 'pip', 'install', package_name]
@@ -50,13 +45,11 @@ def pip_install(package_name):
         console.print(f"  {package_name} [red]安装失败[/red]")
         return False
 
-
 def get_package_version(package_name):
     try:
         return importlib.metadata.version(package_name)
     except importlib.metadata.PackageNotFoundError:
         return None
-
 
 def check_python_version():
     version = sys.version_info
@@ -64,7 +57,6 @@ def check_python_version():
     ok = version >= required
     detail = f"{version.major}.{version.minor}.{version.micro} (需要 >= 3.10.15)"
     return ok, detail, f"{version.major}.{version.minor}.{version.micro}"
-
 
 def check_ffmpeg():
     try:
@@ -74,14 +66,12 @@ def check_ffmpeg():
     except FileNotFoundError:
         return False, "未安装"
 
-
 def check_colorednoise():
     try:
         import colorednoise
         return True, get_package_version('colorednoise') or "已安装"
     except ImportError:
         return False, "未安装"
-
 
 def check_numpy():
     try:
@@ -90,14 +80,12 @@ def check_numpy():
     except ImportError:
         return False, "未安装"
 
-
 def check_bottle():
     try:
         import bottle
         return True, get_package_version('bottle') or "已安装"
     except ImportError:
         return False, "未安装"
-
 
 def check_pygame():
     try:
@@ -106,14 +94,12 @@ def check_pygame():
     except ImportError:
         return False, "未安装"
 
-
 def check_pydub():
     try:
         import pydub
         return True, get_package_version('pydub') or "已安装"
     except ImportError:
         return False, "未安装"
-
 
 def check_cheroot():
     try:
@@ -122,7 +108,6 @@ def check_cheroot():
     except ImportError:
         return False, "未安装"
 
-
 def check_requests():
     try:
         import requests
@@ -130,14 +115,12 @@ def check_requests():
     except ImportError:
         return False, "未安装"
 
-
 def check_rich():
     try:
         import rich
         return True, get_package_version('rich') or "已安装"
     except ImportError:
         return False, "未安装"
-
 
 def check_files():
     results = []
@@ -212,7 +195,6 @@ def check_files():
         results.append(('__pycache__/', False, '文件夹不存在'))
     return results
 
-
 def check_audio_files():
     if not os.path.exists('word_list.json') or not os.path.exists('sound_list.json'):
         return None, "word_list.json 或 sound_list.json 不存在，跳过音频匹配检测"
@@ -262,7 +244,6 @@ def check_audio_files():
     else:
         return False, "; ".join(details)
 
-
 def install_ffmpeg():
     system = platform.system()
     if system == 'Darwin':
@@ -276,14 +257,12 @@ def install_ffmpeg():
     else:
         console.print(f"  不支持的系统: {system}，请手动安装 ffmpeg")
 
-
 def install_colorednoise():
     console.print("  正在安装 colorednoise 和 numpy...")
     if pip_install('colorednoise') and pip_install('numpy'):
         console.print("  [green]colorednoise 和 numpy 安装成功[/green]")
     else:
         console.print("  [red]安装失败[/red]，请手动执行: pip install colorednoise numpy")
-
 
 def main():
     os.chdir(PROJECT_BASE_PATH)
@@ -444,7 +423,6 @@ def main():
     else:
         console.print("\n[dim]没有检测到可自动修复的问题。[/dim]")
 
-    # 素材缺失是新用户最常见的卡点，单独给一块可照着做的说明
     words_dir = 'cassie/words/'
     words_present = os.path.exists(words_dir) and any(
         name.endswith('.wav') for name in os.listdir(words_dir))
@@ -474,7 +452,6 @@ def main():
         box=box.DOUBLE,
         border_style="green" if overall_success else "red",
     ))
-
 
 if __name__ == "__main__":
     main()

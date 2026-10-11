@@ -1,29 +1,3 @@
-"""C.A.S.S.I.E. 广播生成器 Python 客户端。
-
-同一套接口支持两种调用方式：
-
-    进程内（推荐，无需启服务、无需网络）
-        from cassie_api import CassieClient
-        with CassieClient.local() as cassie:
-            meta = cassie.synthesize('attention , all personnel .',
-                                     'out.wav', room_size=2.0, decay_time=7.0)
-
-    远程（连到已经跑起来的 cassie_play.py）
-        with CassieClient.remote('http://127.0.0.1:8080') as cassie:
-            print(cassie.health()['status'])
-            cassie.play('mtf epsilon 11')
-
-两种模式的方法名、参数名、返回值完全一致，切换只需要换构造方式。
-
-参数命名：方法接受三组关键字参数
-
-    * 结构参数（text / output_path / name ...）——位置或关键字传入
-    * 合成参数（pitch / speed / room_size / decay_time ...）——见 PARAMETERS
-    * 传输参数（timeout / api_key ...）——由客户端构造时决定
-
-合成参数使用下划线简化名（room_size），同时也接受 API 原始名
-（reverb_room_size），两者等价。
-"""
 from __future__ import annotations
 
 import base64
@@ -44,7 +18,6 @@ __all__ = [
 DEFAULT_BASE_URL = 'http://127.0.0.1:8080'
 API_PREFIX = '/api/v1'
 
-# 简化名 -> 服务端字段名。没有列在这里的键按原样透传。
 PARAMETER_ALIASES: Dict[str, str] = {
     'speed': 'speed',
     'pitch': 'pitch',
@@ -86,7 +59,6 @@ PARAMETER_ALIASES: Dict[str, str] = {
     'bell_extra_duration': 'bell_extra_duration',
     'special_bell_start': 'special_bell_start',
     'special_bell_end': 'special_bell_end',
-    # 空间效果的开销控制
     'quality': 'spatial_quality',
     'spatial_quality': 'spatial_quality',
     'speed_up': 'spatial_quality',
@@ -96,7 +68,6 @@ PARAMETER_ALIASES: Dict[str, str] = {
     'processing_mode': 'spatial_mode',
 }
 
-# 便于外部自省与文档生成：简化名 -> 说明
 PARAMETERS: Dict[str, str] = {
     'pitch': '音高倍率，0.1 ~ 10，1.0 为原音',
     'speed': '语速修正。正数加大单词间隔，负数按比例裁剪首尾静音',
@@ -130,14 +101,11 @@ PARAMETERS: Dict[str, str] = {
     'spatial_mode': '同 mode（服务端原字段名）',
 }
 
-
 class CassieError(Exception):
-    """客户端异常基类。"""
-
-
+    pass
+    
 class CassieAPIError(CassieError):
-    """服务端返回了 ok=false，或 HTTP 状态异常。"""
-
+    
     def __init__(self, message: str, code: str = 'error', status: int = 0,
                  payload: Optional[dict] = None):
         super().__init__(message)
@@ -145,13 +113,11 @@ class CassieAPIError(CassieError):
         self.status = status
         self.payload = payload or {}
 
-
 class CassieUnavailableError(CassieError):
-    """连不上服务端，或进程内模式缺失依赖。"""
-
-
+    pass
+    
 def _translate_params(kwargs: Dict[str, Any]) -> Dict[str, Any]:
-    """把简化参数名翻译成服务端字段名，同时接受原始字段名。"""
+    
     translated: Dict[str, Any] = {}
     for key, value in kwargs.items():
         if value is None:
@@ -159,10 +125,8 @@ def _translate_params(kwargs: Dict[str, Any]) -> Dict[str, Any]:
         translated[PARAMETER_ALIASES.get(key, key)] = value
     return translated
 
-
 class CassieClient:
-    """C.A.S.S.I.E. 客户端，进程内或远程二选一。"""
-
+    
     def __init__(self, base_url: Optional[str] = None, *, terminal=None,
                  timeout: float = 120.0, api_key: Optional[str] = None):
         self.base_url = (base_url or DEFAULT_BASE_URL).rstrip('/')
@@ -171,19 +135,9 @@ class CassieClient:
         self._terminal = terminal
         self._local = terminal is not None
 
-    # ------------------------------------------------------------------
-    # 构造
-    # ------------------------------------------------------------------
-
     @classmethod
     def local(cls, **kwargs) -> 'CassieClient':
-        """进程内模式：直接驱动本机的 cassie_play 逻辑。
-
-        需要把项目根目录加入 sys.path（pip 安装或自行 insert）。
-        首次调用会初始化 pygame 混音器，因此默认是有声播放；
-        只想离线合成时，在导入 cassie_play 之前设置
-        os.environ['SDL_AUDIODRIVER'] = 'dummy' 即可静音。
-        """
+        
         try:
             import cassie_play
         except ImportError as error:
@@ -191,7 +145,6 @@ class CassieClient:
                 '无法导入 cassie_play，请确认项目根目录在 sys.path 中：{}'.format(error))
         terminal = getattr(cassie_play, '_api_terminal', None)
         if terminal is None:
-            # 复用 HTTP 路由持有的实例，保证进程内客户端与服务端状态一致
             terminal = getattr(cassie_play, 'cassie', None)
             if terminal is None:
                 terminal = cassie_play.CASSIETerminal()
@@ -201,7 +154,7 @@ class CassieClient:
 
     @classmethod
     def remote(cls, base_url: str = DEFAULT_BASE_URL, **kwargs) -> 'CassieClient':
-        """远程模式：通过 HTTP 调用已经运行的 cassie_play 服务。"""
+        
         return cls(base_url, **kwargs)
 
     def __enter__(self) -> 'CassieClient':
@@ -211,16 +164,12 @@ class CassieClient:
         self.close()
 
     def close(self) -> None:
-        """释放资源。远程模式无副作用；进程内模式会停掉正在播放的广播。"""
+        
         if self._local and self._terminal is not None:
             try:
                 self._terminal.stop_playback()
             except Exception:
                 pass
-
-    # ------------------------------------------------------------------
-    # HTTP 传输
-    # ------------------------------------------------------------------
 
     def _request(self, method: str, path: str, payload: Optional[dict] = None,
                  *, raw: bool = False, query: Optional[dict] = None):
@@ -270,24 +219,20 @@ class CassieClient:
             return parsed['data']
         return parsed
 
-    # ------------------------------------------------------------------
-    # 只读接口
-    # ------------------------------------------------------------------
-
     def health(self) -> Dict[str, Any]:
-        """运行状况：播放状态、素材库统计、环境信息。"""
+        
         if self._local:
             return self._terminal.health()
         return self._request('GET', '/health')
 
     def api_documentation(self) -> Dict[str, Any]:
-        """服务端自描述的接口清单与参数默认值。"""
+        
         if self._local:
             return self._terminal.api_documentation()
         return self._request('GET', '/')
 
     def status(self) -> Dict[str, Any]:
-        """播放状态。"""
+        
         if self._local:
             return {
                 'playing': bool(self._terminal.is_playing),
@@ -297,38 +242,38 @@ class CassieClient:
         return self._request('GET', '/status')
 
     def words(self) -> List[str]:
-        """所有可用单词。"""
+        
         if self._local:
             return self._terminal.list_words()
         return self._request('GET', '/words')['words']
 
     def sounds(self) -> List[str]:
-        """所有可用铃声文件名。"""
+        
         if self._local:
             return self._terminal.list_sounds()
         return self._request('GET', '/sounds')['sounds']
 
     def validate(self, text: str) -> Dict[str, Any]:
-        """拼写检查：返回文本里缺少音频的单词。"""
+        
         if self._local:
             return self._terminal.validate_text(text)
         return self._request('POST', '/validate', {'text': text})
 
     def plan(self, text: str, **params) -> Dict[str, Any]:
-        """只解析不合成，返回时间线与错误列表。"""
+        
         overrides = _translate_params(params)
         if self._local:
             return self._terminal.plan_broadcast(text, overrides)
         return self._request('POST', '/plan', {'text': text, **overrides})
 
     def settings(self) -> Dict[str, Any]:
-        """读取服务端当前默认参数。"""
+        
         if self._local:
             return self._terminal.snapshot_settings()
         return self._request('GET', '/settings')['settings']
 
     def update_settings(self, reset: bool = False, **params) -> Dict[str, Any]:
-        """修改服务端默认参数（会影响后续所有调用与网页端）。"""
+        
         payload = _translate_params(params)
         if reset:
             payload['reset'] = True
@@ -345,18 +290,14 @@ class CassieClient:
             return {'applied': applied, 'settings': self._terminal.snapshot_settings()}
         return self._request('POST', '/settings', payload)
 
-    # ------------------------------------------------------------------
-    # 预设
-    # ------------------------------------------------------------------
-
     def presets(self) -> Dict[str, str]:
-        """全部预设（名称 -> 广播文本）。"""
+        
         if self._local:
             return dict(getattr(self._terminal, 'presets', {}) or {})
         return self._request('GET', '/presets')['presets']
 
     def preset(self, name: str) -> str:
-        """读取单个预设内容。"""
+        
         if self._local:
             presets = getattr(self._terminal, 'presets', {}) or {}
             if name not in presets:
@@ -365,7 +306,7 @@ class CassieClient:
         return self._request('GET', '/presets/' + urllib.parse.quote(name))['content']
 
     def save_preset(self, name: str, content: str) -> Dict[str, Any]:
-        """新增或覆盖预设。"""
+        
         if self._local:
             self._terminal.presets[name] = content
             self._terminal.save_presets()
@@ -373,7 +314,7 @@ class CassieClient:
         return self._request('POST', '/presets', {'name': name, 'content': content})
 
     def delete_preset(self, name: str) -> Dict[str, Any]:
-        """删除预设。"""
+        
         if self._local:
             presets = getattr(self._terminal, 'presets', {}) or {}
             if name not in presets:
@@ -384,23 +325,16 @@ class CassieClient:
         return self._request('DELETE', '/presets/' + urllib.parse.quote(name))
 
     def play_preset(self, name: str) -> Dict[str, Any]:
-        """播放预设内容。"""
+        
         if self._local:
             text = self.preset(name)
             self.play(text)
             return {'playing': True, 'name': name, 'text': text}
         return self._request('POST', '/presets/{}/play'.format(urllib.parse.quote(name)))
 
-    # ------------------------------------------------------------------
-    # 合成与播放
-    # ------------------------------------------------------------------
-
     def synthesize(self, text: str, output_path: Optional[str] = None, *,
                    filename: Optional[str] = None, **params) -> Dict[str, Any]:
-        """合成广播为 WAV 文件，返回元数据（含输出路径与 sha256）。
-
-        output_path 为空时写入临时文件，路径在返回值的 path 字段里。
-        """
+        
         overrides = _translate_params(params)
 
         if self._local:
@@ -444,7 +378,7 @@ class CassieClient:
         return metadata
 
     def synthesize_bytes(self, text: str, **params) -> bytes:
-        """合成并直接返回 WAV 字节，不落盘。"""
+        
         overrides = _translate_params(params)
         if self._local:
             metadata = self.synthesize(text, **params)
@@ -462,7 +396,7 @@ class CassieClient:
         return body
 
     def play(self, text: str, **params) -> Dict[str, Any]:
-        """播放广播（立即返回，后台线程执行）。"""
+        
         overrides = _translate_params(params)
         if self._local:
             started, message = self._terminal.start_playback(text, overrides)
@@ -472,14 +406,14 @@ class CassieClient:
         return self._request('POST', '/play', {'text': text, **overrides})
 
     def stop(self) -> Dict[str, Any]:
-        """停止播放并静音。"""
+        
         if self._local:
             self._terminal.stop_playback()
             return {'playing': False, 'stop_requested': True}
         return self._request('POST', '/stop')
 
     def wait_until_done(self, timeout: float = 600.0, poll: float = 0.25) -> bool:
-        """等待当前播放结束，返回是否在超时前结束。"""
+        
         import time as _time
         deadline = _time.monotonic() + timeout
         while _time.monotonic() < deadline:
@@ -488,20 +422,16 @@ class CassieClient:
             _time.sleep(poll)
         return False
 
-    # ------------------------------------------------------------------
-    # 便捷方法
-    # ------------------------------------------------------------------
-
     def say(self, text: str, **params) -> Dict[str, Any]:
-        """合成到临时文件并返回元数据。语义糖，等价于 synthesize(text, **params)。"""
+        
         return self.synthesize(text, **params)
 
     def save(self, text: str, path: str, **params) -> Dict[str, Any]:
-        """合成并保存到指定路径。"""
+        
         return self.synthesize(text, path, **params)
 
     def describe(self, text: str, **params) -> Dict[str, Any]:
-        """可读的时间线摘要，便于确认指令展开结果。"""
+        
         plan = self.plan(text, **params)
         lines = [
             '文本: {}'.format(plan['text']),
@@ -519,23 +449,18 @@ class CassieClient:
 
     @staticmethod
     def duration_of(path: str) -> float:
-        """读取 WAV 文件时长（秒）。"""
+        
         with wave.open(path, 'rb') as handle:
             return handle.getnframes() / float(handle.getframerate())
-
 
 def _sha256(data: bytes) -> str:
     import hashlib
     return hashlib.sha256(data).hexdigest()
 
-
 def synthesize_batch(items: Iterable[Dict[str, Any]], *, mode: str = 'local',
                      base_url: str = DEFAULT_BASE_URL, output_dir: str = '.',
                      **client_kwargs) -> List[Dict[str, Any]]:
-    """批量合成。items 里每项形如 {'text': ..., 'filename': ..., 参数...}。
-
-    返回与输入等长的结果列表；单项失败时该项为 {'ok': False, 'error': ...}。
-    """
+    
     client = CassieClient.local(**client_kwargs) if mode == 'local' \
         else CassieClient.remote(base_url, **client_kwargs)
     results: List[Dict[str, Any]] = []

@@ -1,4 +1,4 @@
-/* C.A.S.S.I.E. — 主页面（广播生成器）中英词表 */
+
 (function () {
     if (!window.CASSIE_I18N) return;
 
@@ -18,7 +18,6 @@
             'terminal.clear': '清空',
             'terminal.ready': '就绪。请输入广播内容。',
 
-            /* 素材缺失提示 */
             'assets.title': '没有找到音频素材',
             'assets.why': '本仓库和发布包都<strong>不包含音频素材</strong>，需要单独下载后程序才能生成广播。',
             'assets.how': '运行 <code>CASSIE语音生成/cassie_download.py</code> 即可自动下载并解压到正确位置。',
@@ -195,7 +194,6 @@
             'terminal.clear': 'Clear',
             'terminal.ready': 'Ready. Enter the broadcast content.',
 
-            /* Missing-assets notice */
             'assets.title': 'Audio assets not found',
             'assets.why': 'Neither this repository nor the release packages include the audio assets; the app cannot generate a broadcast until you download them separately.',
             'assets.how': 'Run <code>CASSIE语音生成/cassie_download.py</code> to download and extract them into the right place automatically.',

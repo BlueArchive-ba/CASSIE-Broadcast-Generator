@@ -1,18 +1,3 @@
-"""C.A.S.S.I.E. API 用法示例。
-
-直接运行（进程内模式，不需要先启服务）：
-
-    python examples/api_usage.py
-
-只想离线合成、不发声：
-
-    set SDL_AUDIODRIVER=dummy    # Windows
-    python examples/api_usage.py
-
-连到已经运行的 web 服务：
-
-    python examples/api_usage.py --remote http://127.0.0.1:8080
-"""
 import argparse
 import os
 import sys
@@ -20,15 +5,13 @@ import sys
 PROJECT_BASE_PATH = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, PROJECT_BASE_PATH)
 
-from cassie_api import CassieAPIError, CassieClient  # noqa: E402
-
+from cassie_api import CassieAPIError, CassieClient
 
 def section(title):
     print()
     print('=' * 68)
     print(title)
     print('=' * 68)
-
 
 def main():
     parser = argparse.ArgumentParser(description='C.A.S.S.I.E. API 用法示例')
@@ -68,8 +51,6 @@ def main():
             print('{!r:42s} -> 缺失 {}'.format(text, result['not_found'] or '无'))
 
         section('4. 解析时间线（不合成）')
-        # 混响会把每个单词的音频往后延长一段拖尾，时间线随之变长；
-        # 想先看纯干声的排布，把 effects 关掉即可。
         dry = client.describe('mtf epsilon 11 . all personnel .', effects=False)
         print('--- 关闭空间效果（纯排布）---')
         print(dry['summary'])
@@ -134,7 +115,6 @@ def main():
 
         section('完成')
         print('输出目录:', os.path.abspath(args.out))
-
 
 if __name__ == '__main__':
     main()

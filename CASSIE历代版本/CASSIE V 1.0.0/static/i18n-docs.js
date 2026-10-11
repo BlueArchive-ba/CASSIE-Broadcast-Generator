@@ -1,4 +1,4 @@
-/* C.A.S.S.I.E. — 文档页词表（帮助页 + 开发者技术文档） */
+
 (function () {
     if (!window.CASSIE_I18N) return;
 

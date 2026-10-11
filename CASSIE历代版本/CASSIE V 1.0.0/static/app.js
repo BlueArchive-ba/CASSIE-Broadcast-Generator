@@ -410,7 +410,7 @@ function openAdvancedModal() {
 }
 
 on(advancedBtn, 'click', function() {
-    // 上一次保存还在路上时先别读服务端，否则会把刚改的值覆盖回旧的
+    
     if (advancedSaving) {
         pendingAdvancedAction = 'open';
         return;
@@ -564,7 +564,7 @@ document.addEventListener('keydown', function(e) {
             var html = '';
             for (var i = 0; i < words.length; i++) {
                 var word = words[i];
-                // 用户输入，进 innerHTML 前必须转义
+                
                 var safe = word.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
                 if (notFoundWords.indexOf(word) !== -1) {
                     html += '<span class="not-found-word">' + safe + '</span> ';
@@ -928,7 +928,7 @@ var exportProgressTarget = 0;
 var exportProgressShown = 0;
 var exportProgressFrame = 0;
 var exportProgressLastFrameAt = 0;
-// 补间时长要 >= finishExportProgress 里的等待，否则会先复位、再补完
+
 var EXPORT_PROGRESS_FILL_MS = 450;
 var EXPORT_PROGRESS_MIN_VISIBLE_MS = 500;
 
@@ -1422,8 +1422,6 @@ on(playBtn, 'click', playBroadcast);
             }
         });
 
-        // 素材不随仓库和发布包分发，缺素材时页面上必须直说，
-        // 否则新用户只会看到"输入什么都没反应"。
         function checkAssets() {
             var box = document.getElementById('assetsWarning');
             if (!box) return;
@@ -1440,7 +1438,7 @@ on(playBtn, 'click', playBroadcast);
                     if (path && library.words_dir) path.textContent = library.words_dir;
                     box.hidden = false;
                 })
-                .catch(function() { /* 拿不到状态就不打扰用户 */ });
+                .catch(function() {  });
         }
 
         window.addEventListener('cassie:langchange', function() {

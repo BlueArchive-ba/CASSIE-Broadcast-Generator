@@ -1,4 +1,4 @@
-/* C.A.S.S.I.E. — 词汇检测工具（tools/word_search）中英词表 */
+
 (function (root) {
     'use strict';
 
@@ -36,7 +36,6 @@
             'ws.count.words': '词汇总数：',
             'ws.count.loaded': '已加载：',
 
-            /* 汇总与计数（{count} / {total} / {found} / {missing} 由 JS 填充） */
             'ws.summary.total': '总计 {count} 个段',
             'ws.summary.found': '找到 {count} 个',
             'ws.summary.missing': '缺失 {count} 个',
@@ -91,13 +90,11 @@
             'ws.count.words': 'Words: ',
             'ws.count.loaded': 'Loaded: ',
 
-            /* Summary & counts ({count} / {total} / {found} / {missing} filled by JS) */
             'ws.summary.total': '{count} segments in total',
             'ws.summary.found': '{count} found',
             'ws.summary.missing': '{count} missing',
             'ws.summary.specialTotal': '{count} special files in total',
 
-            /* Per-word resolution: how the entry was matched */
             'ws.match.punctuation': '{word} (punctuation)',
             'ws.match.mtf': 'mtf → mobile task force',
             'ws.match.glitch': '{word} (glitch sound)',
@@ -132,7 +129,6 @@
         var type = result.type;
         var text = result.display || '';
 
-        /* 命中的词条本身是英文，直接取基准词；display 里可能带「 → 拆分」后缀 */
         var word = text.split(' → ')[0];
         var target = text.indexOf(' → ') >= 0 ? text.slice(text.indexOf(' → ') + 3) : '';
 
@@ -258,7 +254,6 @@
         syncPage();
     });
 
-    /* 用 setTimeout 排在 i18n.js 的 init 之后，保证读到最终语言 */
     function boot() {
         root.setTimeout(syncPage, 0);
     }

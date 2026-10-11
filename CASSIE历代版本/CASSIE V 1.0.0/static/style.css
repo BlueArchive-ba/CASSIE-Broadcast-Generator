@@ -1,4 +1,3 @@
-/* C.A.S.S.I.E. — 主页面版式（黑底 / 白字 / 蓝红点缀） */
 
 :root {
         --ink: #0a0a0a;
@@ -821,7 +820,6 @@ body {
     color: var(--red-bright);
 }
 
-/* 素材缺失提示：新用户第一眼就该看到，压在终端上方 */
 .assets-warning {
     margin-top: 12px;
     padding: 14px 18px;
@@ -867,8 +865,6 @@ body {
     margin-top: 6px;
 }
 
-/* 警告弹窗（测试功能的试验性提示）。
-   这一段刻意不跟随全站黑白灰体系，是全站唯一的强告警视觉，勿按主题改写。 */
 .warning-overlay {
     position: fixed;
     inset: 0;

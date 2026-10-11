@@ -25,11 +25,9 @@ from pydub.silence import detect_leading_silence
 import numpy as np
 import colorednoise as cn
 
-# 默认静音 pydub 内部的句柄提示；显式配置 -W 时保持原样以便排查。
 if not sys.warnoptions:
     import warnings
     warnings.filterwarnings('ignore', category=ResourceWarning)
-
 
 PROJECT_BASE_PATH = os.path.dirname(os.path.abspath(__file__))
 AUDIO_BASE_PATH = os.path.join(PROJECT_BASE_PATH, "cassie", "words")
@@ -42,34 +40,22 @@ API_VERSION = 'v1'
 API_PREFIX = '/api/v1'
 PROJECT_VERSION = '1.0.0'
 
-# 拖尾系数达到这个值就不需要淡出（正好是历史行为，尾部本身已经衰减到听不见）
 CASSIE_TAIL_FADE_REFERENCE = 0.35
 
-# 音频素材与发布包都不随仓库分发，缺素材时把用户引到这里
 RELEASES_URL = 'https://github.com/BlueArchive-ba/CASSIE-Broadcast-Generator/releases'
 ASSETS_DOWNLOAD_URL = RELEASES_URL
 
-# [preset:名字] 展开的最大层数，兜底防止环引用把内存吃满
 MAX_PRESET_DEPTH = 16
 
-# 合成进度回调的线程局部暂存（并发请求不会互相串台）
 _PENDING_PROGRESS = threading.local()
 
-# 整句处理时用来把「正文边界 / 含拖尾总时长」传回 interpret_broadcast_text。
-# 走线程局部而不是给事件列表挂属性（list 不允许自定义属性），
-# 也不会被并发请求互相覆盖。
 _PENDING_TIMELINE = threading.local()
-
 
 SUPPORTED_LANGUAGES = ('zh', 'en')
 DEFAULT_LANGUAGE = 'zh'
 
-
 def normalize_language(value):
-    """把取值归一化成 'zh' / 'en'，认不出来时返回 None。
-
-    zh-CN、en_US 这类带地区或分隔符的写法只取主语言标签。
-    """
+    
     if value is None:
         return None
     text = str(value).strip().lower().replace('_', '-')
@@ -77,7 +63,6 @@ def normalize_language(value):
         return None
     primary = text.split('-')[0]
     return primary if primary in SUPPORTED_LANGUAGES else None
-
 
 MESSAGES = {
     'zh': {
@@ -251,52 +236,39 @@ MESSAGES = {
     },
 }
 
-
 _REQUEST_LANG = threading.local()
 
 _PROCESS_LANGUAGE = normalize_language(os.environ.get('CASSIE_LANG')) or DEFAULT_LANGUAGE
 
-
 def current_language():
-    """当前生效的语言：请求内用请求语言，请求外回落进程语言（默认 zh）。"""
+    
     language = getattr(_REQUEST_LANG, 'value', None)
     return language if language in SUPPORTED_LANGUAGES else _PROCESS_LANGUAGE
 
-
 def set_language(value):
-    """写入当前线程的语言，取值不合法时回落默认语言。"""
+    
     _REQUEST_LANG.value = normalize_language(value) or DEFAULT_LANGUAGE
 
-
 def language_from_request():
-    """按 查询参数 lang → 请求头 X-Cassie-Lang → 默认语言 的顺序判定语言。
-
-    显式传了 lang 但取值不认识（例如 fr）时直接回落默认语言，不再看请求头。
-    """
+    
     for value in (request.query.get('lang'), request.headers.get('X-Cassie-Lang')):
         if value is None or not str(value).strip():
             continue
         return normalize_language(value) or DEFAULT_LANGUAGE
     return DEFAULT_LANGUAGE
 
-
 @hook('before_request')
 def _write_request_language():
-    """每个请求开始时写入语言，所有路由（含 /play、/export、/api/v1/*）自动覆盖。"""
+    
     set_language(language_from_request())
 
-
 def language_join(items, zh_separator=' 或 ', en_separator=' or '):
-    """按当前语言选择连接词，用来把枚举值拼进提示文案。"""
+    
     separator = zh_separator if current_language() == DEFAULT_LANGUAGE else en_separator
     return separator.join(items)
 
-
 def tr(key, **kwargs):
-    """取当前请求语言的文案。
-
-    缺失时先回落中文，再回落 key 本身；插值统一走 .format(**kwargs)。
-    """
+    
     template = (MESSAGES.get(current_language()) or {}).get(key)
     if template is None:
         template = MESSAGES[DEFAULT_LANGUAGE].get(key)
@@ -309,8 +281,6 @@ def tr(key, **kwargs):
     except (KeyError, IndexError):
         return template
 
-
-# API 与前端面板共用的可调参数：(键, 默认值)
 SYNTHESIS_PARAM_DEFAULTS = {
     'pitch': 1.0,
     'speed': -10,
@@ -346,7 +316,6 @@ SYNTHESIS_PARAM_DEFAULTS = {
     'spatial_mode': 'word',
 }
 
-# 允许通过 API 改动、且会被设置快照覆盖的字段
 API_MUTABLE_FIELDS = (
     'pitch', 'speed', 'enable_number_reading', 'include_bell', 'enable_special_bell',
     'low_cut_freq', 'high_cut_freq', 'mid_boost_gain', 'overdrive_gain', 'clip_threshold',
@@ -372,8 +341,7 @@ nato_map = {
     'yankee': 'y', 'zulu': 'z'
 }
 
-
-port = 8080  # 默认端口号
+port = 8080
 
 class CASSIETerminal:
     def __init__(self):
@@ -397,12 +365,10 @@ class CASSIETerminal:
         self.speed = 20
         self.bell_lock = threading.Lock()
         self.play_lock = threading.Lock()
-        # API 每次调用都会临时覆盖参数，用这把锁保证还原过程不被打断
         self.settings_lock = threading.RLock()
         self.bell_lead_time = 3
         self.bell_extra_duration = 3.0
 
-        # 测试数值
         self.broadcast_effect_enabled = False
         self.include_bell = False
         self.low_cut_freq = 0
@@ -415,14 +381,14 @@ class CASSIETerminal:
         self.compressor_attack = 2.0
         self.compressor_release = 50.0
         self.reverb_enabled = True
-        self.reverb_pre_delay = 18.0          # ms，直达声与首次反射之间
-        self.reverb_room_size = 1.0           # 反射间距缩放系数
-        self.reverb_decay_time = 5.5          # RT60，单位秒。走廊建议 3~8
-        self.reverb_damping = 4000.0          # 高频吸收：4 kHz 相对低频的衰减时间比，500~4000
-        self.reverb_diffusion = 0.72          # 反馈矩阵扩散强度
-        self.reverb_tail_brightness = 0.55    # 尾音中高频占比
-        self.reverb_wet = 0.35                # 混响在总输出中的占比
-        self.reverb_early_reflections = True  # 是否叠加离散早期反射
+        self.reverb_pre_delay = 18.0
+        self.reverb_room_size = 1.0
+        self.reverb_decay_time = 5.5
+        self.reverb_damping = 4000.0
+        self.reverb_diffusion = 0.72
+        self.reverb_tail_brightness = 0.55
+        self.reverb_wet = 0.35
+        self.reverb_early_reflections = True
         self.spatial_quality = 0
         self.spatial_mode = 'word'
         self._reverb_cache = {}
@@ -438,7 +404,6 @@ class CASSIETerminal:
         self.hiss_mix_ratio = 0.30
 
         self.stored_settings = self.apply_stored_settings()
-        # 进程启动时刻，配合 /health 的 features 判断跑的是不是最新代码
         self.started_at = datetime.datetime.now().isoformat(timespec='seconds')
 
     def load_word_set(self):
@@ -474,10 +439,8 @@ class CASSIETerminal:
         with open(self.preset_file, 'w', encoding='utf-8') as f:
             json.dump(self.presets, f, ensure_ascii=False, indent=2)
 
-    # 高级设置落盘到 settings.json，只保存允许外部调整的字段。
-
     def load_settings(self):
-        """读取上次保存的高级设置，缺失或损坏时静默使用默认值。"""
+        
         if not os.path.exists(self.settings_file):
             return {}
         try:
@@ -494,7 +457,7 @@ class CASSIETerminal:
                 if key in API_MUTABLE_FIELDS}
 
     def save_settings(self):
-        """把当前可调参数写入 settings.json。"""
+        
         payload = {key: getattr(self, key, SYNTHESIS_PARAM_DEFAULTS.get(key))
                    for key in API_MUTABLE_FIELDS}
         try:
@@ -505,7 +468,7 @@ class CASSIETerminal:
             return False, str(error)
 
     def apply_stored_settings(self):
-        """启动时套用已保存的设置，并返回生效的字段。"""
+        
         stored = self.load_settings()
         for key, value in stored.items():
             if key in ('spatial_quality',):
@@ -551,7 +514,6 @@ class CASSIETerminal:
             time.sleep(0.01)
         return False
 
-
     def generate_noise(self, duration_ms, sample_rate=44100, channels=1, sample_width=2, noise_type='pink'):
 
         num_samples = int(duration_ms * sample_rate / 1000)
@@ -572,7 +534,7 @@ class CASSIETerminal:
         )
 
     def generate_treble_tail(self, audio):
-        """从音频高频成分中提取主频，生成平滑衰减的高频尾音。"""
+        
         duration_ms = max(0.0, float(self.treble_stretch))
         if duration_ms <= 0 or len(audio) < 20:
             return AudioSegment.empty()
@@ -616,12 +578,9 @@ class CASSIETerminal:
         except Exception:
             return AudioSegment.empty()
 
-
     FDN_DELAY_LINES = (941, 1093, 1229, 1361, 1483, 1609, 1721, 1879)
     FDN_BLOCK = 64
     FDN_MIN_HF_RATIO = 0.4
-    # 反馈回路内阻尼低通的极点。上限 0.8：再接近 1 的话
-    # pole^(-段长) 会超出 float64 的有效位数，低频反而被压掉。
     FDN_DAMPING_POLE = 0.8
     FDN_DAMPING_CHUNK = 64
     REVERB_SEND_GAIN = 0.45
@@ -697,7 +656,7 @@ class CASSIETerminal:
 
     @classmethod
     def quality_profile(cls, level):
-        """取某个空间效果质量档次的参数，非法值回落到第 0 档。"""
+        
         try:
             index = int(level)
         except (TypeError, ValueError):
@@ -706,16 +665,12 @@ class CASSIETerminal:
         return cls.SPATIAL_QUALITY_LEVELS[index]
 
     def spatial_profile(self):
-        """当前生效的质量档次。"""
+        
         return self.quality_profile(getattr(self, 'spatial_quality', 0))
 
     @staticmethod
     def _build_hadamard(size):
-        """生成 size 阶归一化 Hadamard 矩阵，用作反馈矩阵。
-
-        反馈矩阵必须是正交矩阵，否则网络会发散；Hadamard 矩阵各项为 ±1，
-        任意两条延迟线之间的反射等强度，正好给出走廊里无方向感的密集反射。
-        """
+        
         matrix = np.ones((1, 1), dtype=np.float64)
         while matrix.shape[0] < size:
             matrix = np.block([[matrix, matrix], [matrix, -matrix]])
@@ -723,18 +678,14 @@ class CASSIETerminal:
 
     @staticmethod
     def _fft_convolve(signal, impulse):
-        """基于 FFT 的一维卷积，输出长度固定为 len(signal) + len(impulse) - 1。"""
+        
         total = len(signal) + len(impulse) - 1
         size = 1 << max(1, int(total - 1).bit_length())
         spectrum = np.fft.rfft(signal, size) * np.fft.rfft(impulse, size)
         return np.fft.irfft(spectrum, size)[:total]
 
     def _prepare_fdn(self, frame_rate, channel):
-        """准备一组 FDN 参数（延迟线、反馈增益、阻尼极点、扩散矩阵）。
-
-        左右声道使用略微不同的延迟线长度，制造自然的立体声去相关。
-        结果只与参数有关、与音频内容无关，因此按参数缓存。
-        """
+        
         delay_lines = np.asarray(self.FDN_DELAY_LINES, dtype=np.float64)
         count = len(delay_lines)
         if channel > 0:
@@ -755,9 +706,6 @@ class CASSIETerminal:
         matrix = self._build_hadamard(count)
         matrix = diffusion * matrix + (1.0 - diffusion) * np.eye(count)
 
-        # 质量档次决定块长：块长只影响主循环迭代次数，不改变声音。
-        # 上限受两条约束：不超过最短延迟线（否则环形缓冲区读写会互相覆盖，
-        # 这也是原来 FDN_BLOCK=64 的由来），以及不超过阻尼分段的精度上限。
         profile = self.spatial_profile()
         block_cap = int(delays.min())
         block = max(8, min(int(profile['block']), block_cap))
@@ -779,7 +727,6 @@ class CASSIETerminal:
         }
 
     def _fdn_key(self, frame_rate, channel):
-        # 质量档次必须进缓存键：它改变 block，换档后必须重新准备参数
         return (int(frame_rate), int(channel),
                 int(self.spatial_profile()['level']),
                 round(float(np.clip(self.reverb_room_size, 0.2, 3.0)), 3),
@@ -788,7 +735,7 @@ class CASSIETerminal:
                 round(float(np.clip(self.reverb_diffusion, 0.0, 1.0)), 2))
 
     def _fdn_parameters(self, frame_rate, channel):
-        """带缓存的 FDN 参数。"""
+        
         key = self._fdn_key(frame_rate, channel)
         cached = self._reverb_cache.get(key)
         if cached is None:
@@ -800,12 +747,7 @@ class CASSIETerminal:
 
     def _run_fdn(self, source, params, *, inject_burst=False, tail_samples=None,
                  collect_energy=False):
-        """把 source 送进 FDN，返回 (湿声, 能量轨迹)。
-
-        source 有 N 个采样，N 个采样之后不再注入输入，但网络继续跑
-        tail_samples 个采样把拖尾放完。这正是「拖尾不占时间线」的关键：
-        输出长度由尾长决定，而不是由冲激响应总长决定。
-        """
+        
         delays = params['delays']
         count = params['count']
         max_delay = params['max_delay']
@@ -878,13 +820,7 @@ class CASSIETerminal:
 
     @staticmethod
     def damping_ratio(damping_hz):
-        """把「高频吸收」参数（Hz）映射成 4 kHz 相对低频的衰减时间比。
-
-        4000 Hz 及以上表示不额外吸收高频（比值 1.0），越小表示高频衰减越快。
-        下限 FDN_MIN_HF_RATIO 是当前阻尼结构能达到的最大吸收，
-        再往下要求就超出可调范围了。
-        映射是线性的，因此滑杆在整个可用区间内手感均匀。
-        """
+        
         try:
             value = float(damping_hz)
         except (TypeError, ValueError):
@@ -894,25 +830,7 @@ class CASSIETerminal:
 
     @staticmethod
     def _solve_damping(target_ratio):
-        """反解阻尼参数，使 4 kHz 相对低频的每周期增益等于 target_ratio。
-
-        阻尼结构（反馈回路内）：
-            lowpass: lp[n] = pole*lp[n-1] + (1-pole)*x[n]
-            y[n]    = (1-mix)*x[n] + mix*lp[n]
-        直流处 lp 增益为 1，因此直流总增益恒为 1 —— 低频 RT60 等于设定值；
-        4 kHz 处 lp 幅度为 L(4k)，总增益为 (1-mix) + mix*L(4k)。
-        令它等于 target_ratio 即可解出 mix：
-
-            mix = (1 - target_ratio) / (1 - L(4k))
-
-        pole 取 0.8：4 kHz 处 L ≈ 0.39，200 Hz 处 L ≈ 0.95。
-        mix 从 0 调到 1，4 kHz 的每周期增益从约 0.95 降到约 0.39，
-        也就是高频 RT60 可调到低频的 0.4 ~ 1.0 倍。
-        不用更接近 1 的极点：cumsum 里的 pole^(-k) 会超出 float64 精度，
-        反而把低频拖尾一起压短。
-
-        返回 (mix, pole)。
-        """
+        
         pole = float(CASSIETerminal.FDN_DAMPING_POLE)
         if target_ratio >= 1.0:
             return 0.0, pole
@@ -927,15 +845,7 @@ class CASSIETerminal:
 
     def _generate_fdn_tail(self, frame_rate, channel, room_size, decay, damping, diffusion,
                            collect_energy=False):
-        """跑一遍空输入的网络，得到走廊混响的冲激响应。
-
-        **当前没有任何调用方**：真实混响走 apply_room_reverb()，不经过这里。
-        这个函数是给离线测量/排查用的（可以直接看冲激响应与能量衰减）。
-
-        collect_energy=True 时返回 (冲激响应, 能量轨迹)。
-        能量轨迹记录每块的网络存储能量，用于直接测量衰减时间
-        （输出抽头会因相位干涉而失真，能量则不会）。
-        """
+        
         for key, value in (('reverb_room_size', room_size),
                            ('reverb_decay_time', decay),
                            ('reverb_damping', damping),
@@ -948,13 +858,7 @@ class CASSIETerminal:
                              tail_samples=total, collect_energy=True)
 
     def apply_room_reverb(self, audio, wet=None):
-        """把音频送进走廊混响，返回带拖尾的 AudioSegment。
-
-        直接把音频当作 FDN 的输入，而不是先合成一段冲激响应再做卷积。
-        这点很关键：卷积法的输出长度是 len(音频) + len(冲激响应)，
-        于是每个单词都会被撑到 RT60 那么长，时间线随之被拉长几十秒；
-        直接跑 FDN 时输入结束后只需再跑一小段让拖尾衰减到听不见即可。
-        """
+        
         if len(audio) == 0 or audio.sample_width != 2:
             return audio
         wet_gain = float(np.clip(self.reverb_wet if wet is None else wet, 0.0, 1.0))
@@ -972,7 +876,6 @@ class CASSIETerminal:
             tail_samples = (int(decay * float(profile['tail_factor']) * frame_rate)
                             + int(pre_delay_ms * frame_rate / 1000.0))
             tail_samples = max(tail_samples, int(frame_rate * float(profile['min_tail_sec'])))
-            # 收短后的拖尾必须淡出，否则会在尾部硬切出咔哒声
             fade_samples = 0
             if profile['tail_factor'] < CASSIE_TAIL_FADE_REFERENCE:
                 fade_samples = min(int(frame_rate * 0.05), tail_samples // 3)
@@ -1028,13 +931,7 @@ class CASSIETerminal:
 
     @staticmethod
     def _soft_limit(samples, ceiling):
-        """三次方软削波：只对逼近满量程的峰值做压缩。
-
-        不能用「拐点 + tanh(x-knee)」这种叠加式压缩：单词音频的波峰因数很高
-        （峰值 30000、RMS 只有 1200 左右），把大量低电平样本一起映射到天花板附近
-        反而会把整段电平抬高十几倍。这里对 |x| 在拐点以上做三次方过渡，
-        并把 |x| 硬性截到 ceiling，绝不放大小信号。
-        """
+        
         knee = ceiling * 0.78
         magnitude = np.abs(samples)
         if magnitude.size == 0 or float(np.max(magnitude)) <= knee:
@@ -1099,15 +996,8 @@ class CASSIETerminal:
             return audio
         return audio
 
-    
-
     def _prepare_audio(self, audio, pitch=1.0, speed=0, apply_effects=True):
-        """音高/语速处理，并按需叠加效果链。
-
-        apply_effects=False 时只做音高与语速处理，用于测量「单词占用多久」——
-        效果链里的高音尾音与噪声都会改变音频长度，拿加过效果的长度去排期
-        会让语速设置失效（见 interpret_broadcast_text 里的说明）。
-        """
+        
         if pitch != 1.0:
             new_frame_rate = int(audio.frame_rate * pitch)
             audio = audio._spawn(audio.raw_data, overrides={'frame_rate': new_frame_rate})
@@ -1130,13 +1020,7 @@ class CASSIETerminal:
 
     @staticmethod
     def load_audio(path, fmt='wav'):
-        """读取音频文件，并保证文件句柄被关闭。
-
-        pydub 的 AudioSegment.from_wav(path) 会把打开的文件对象留在
-        AudioSegment 内部，只有等到对象被回收才关闭，于是控制台会出现
-        「unclosed file」的 ResourceWarning，长时间运行还会耗掉文件描述符。
-        换成先自己打开文件、交给 pydub 读完再关闭即可。
-        """
+        
         with open(path, 'rb') as handle:
             if fmt == 'wav':
                 return AudioSegment.from_wav(handle)
@@ -1144,7 +1028,7 @@ class CASSIETerminal:
 
     @staticmethod
     def export_audio(audio, path, fmt='wav'):
-        """写出音频文件，并保证文件句柄被关闭。"""
+        
         exported = audio.export(path, format=fmt)
         try:
             exported.close()
@@ -1153,18 +1037,12 @@ class CASSIETerminal:
         return path
 
     def _play_audio_segment(self, channel, audio, wait=True):
-        # 空音频绝不能交给 pygame：AudioSegment.empty() 的 frame_rate 是 1，
-        # 导出的 WAV 极短，SDL_mixer 在已经持有其它长音频时会直接越界访问，
-        # 整个进程以 0xC0000005 退出（Python 层捕获不到）。
-        # 这类事件只用于时间线记账（例如收尾哨兵），本来就不该发声。
         if audio is None:
             return 0.0
         processed_duration = len(audio) / 1000.0
         if processed_duration <= 0:
             return 0.0
 
-        # pydub 的 export() 返回一个没有关闭的文件对象，必须显式关闭，
-        # 否则每次播放都会泄漏一个文件描述符（并触发 ResourceWarning）。
         temp_file = tempfile.NamedTemporaryFile(suffix='.wav', delete=False)
         export_path = temp_file.name
         temp_file.close()
@@ -1226,7 +1104,6 @@ class CASSIETerminal:
         if not os.path.exists(filepath):
             return
 
-
         audio = self.load_audio(filepath)
 
         if pitch != 1.0:
@@ -1275,8 +1152,6 @@ class CASSIETerminal:
             if os.path.exists(export_path):
                 os.unlink(export_path)
 
-    
-
     SAMPLE_LABELS = {
         'the_vowel': 'the',
         'the_consonant': 'the',
@@ -1293,7 +1168,7 @@ class CASSIETerminal:
 
     @classmethod
     def render_sample_name(cls, name):
-        """把一个音频文件名还原成"听起来是什么"。"""
+        
         text = str(name)
         if text in cls.SAMPLE_LABELS:
             return cls.SAMPLE_LABELS[text]
@@ -1307,17 +1182,12 @@ class CASSIETerminal:
 
     @classmethod
     def spoken_label(cls, item_type, word):
-        """把事件转成"实际上会听到什么"的文字（单行）。"""
+        
         return ' '.join(cls.spoken_parts(item_type, word))
 
     @classmethod
     def spoken_offsets(cls, event, pieces):
-        """算出每个片段相对事件起点的偏移毫秒，用于按播放时序输出日志。
-
-        优先用真实段长（piece_durations_ms）：多个片段是几段音频拼起来的，
-        各自长度不同，按真实长度定位才能和听到的对上。
-        没有段长信息时（例如整句模式下的合并轨）退回按时间槽等分。
-        """
+        
         count = len(pieces)
         if count == 0:
             return []
@@ -1340,12 +1210,7 @@ class CASSIETerminal:
 
     @classmethod
     def spoken_parts(cls, item_type, word):
-        """把事件拆成"逐个念出来的片段"。
-
-        数字是一串音频拼起来的：123 读作
-            ['1', 'hundred', 'and', '20', '3'] -> one / hundred / and / twenty / three
-        播放日志要按片段逐条输出，才能和听到的逐个对上。
-        """
+        
         if item_type == 'number':
             parts = word if isinstance(word, (list, tuple)) else [word]
             return [cls.render_sample_name(part) for part in parts]
@@ -1440,11 +1305,7 @@ class CASSIETerminal:
                     text = text.replace(match.group(0), replacement, 1)
 
         def resolve_preset_content(name, path):
-            """取预设内容，并把内层 [preset:...] 递归展开。
-
-            path 是当前已经走过的预设链，用来检测循环引用。
-            返回 (文本, 是否成功)。失败时文本为空。
-            """
+            
             name = (name or '').strip()
             presets = getattr(self, 'presets', {}) or {}
             if not name:
@@ -1666,10 +1527,7 @@ class CASSIETerminal:
             return audio if len(audio) else None
 
         def piece_durations_ms(words):
-            """逐个片段的原始音频长度（未做音高/语速处理）。
-
-            播放日志靠它把"念到第几段"映射到时间轴上的位置。
-            """
+            
             spans = []
             for word in words if isinstance(words, (list, tuple)) else [words]:
                 filepath = os.path.join(AUDIO_BASE_PATH, word + AUDIO_EXTENSION)
@@ -1813,20 +1671,17 @@ class CASSIETerminal:
                 'content_ms': int(content_ms), 'duration_ms': int(max(content_ms, duration_ms))}
 
     def uses_sentence_processing(self):
-        """当前是否走整句处理模式。"""
+        
         return getattr(self, 'spatial_mode', 'word') == 'sentence'
 
     def spatial_active(self):
-        """空间效果链是否启用（总开关 + 混响 + 湿声，三者同时成立才生效）。"""
+        
         return bool(self.broadcast_effect_enabled
                     and self.reverb_enabled
                     and self.reverb_wet > 0)
 
-
     PROGRESS_STAGES = ('parse', 'reverb', 'export', 'play')
 
-    # 阶段在总进度里的区间。没有这层映射的话每换阶段百分比会退回 0。
-    # reverb 区间最大（耗时几乎都在那里）；play 由前端按播放时间推进。
     PROGRESS_SPANS = {
         'parse': (0, 8),
         'reverb': (8, 72),
@@ -1843,7 +1698,7 @@ class CASSIETerminal:
         return state
 
     def begin_progress(self, total_units, callback):
-        """开始一次带进度的合成。callback(stage, done, total, percent)。"""
+        
         state = self._progress_state()
         state['callback'] = callback
         state['total'] = max(0, int(total_units))
@@ -1852,7 +1707,7 @@ class CASSIETerminal:
         state['percent'] = 0
 
     def set_progress_stage(self, stage, total_units=None):
-        """切换阶段，并可选地重设该阶段的总量（重置计数）。"""
+        
         state = self._progress_state()
         state['stage'] = stage
         if total_units is not None:
@@ -1866,19 +1721,14 @@ class CASSIETerminal:
         self._emit_progress()
 
     def _set_progress_position(self, done, total):
-        """直接设定阶段内的完成量（用于播放这种按时间推进的阶段）。"""
+        
         state = self._progress_state()
         state['done'] = int(done)
         state['total'] = max(1, int(total))
         self._emit_progress()
 
     def estimate_preprocess_event(self, text):
-        """预估预处理（逐词加空间效果）耗时，给前端先跑动画用。
-
-        逐词加效果是同步跑完的，期间没法往 SSE 里推事件；没有预估时长的话
-        界面在预处理阶段会一直停着。每词耗时取自实测（见 per_word_ms），
-        真实事件到达后会覆盖它。
-        """
+        
         span = self.PROGRESS_SPANS['reverb']
         if not self.spatial_active():
             return {'type': 'progress', 'stage': 'reverb', 'done': 0, 'total': 0,
@@ -1892,7 +1742,7 @@ class CASSIETerminal:
                 'estimated': True}
 
     def progress_percent(self, stage, done, total):
-        """把阶段内的完成度映射成整条流程的百分比，且只增不减。"""
+        
         start, end = self.PROGRESS_SPANS.get(stage, (0, 100))
         if total > 0:
             ratio = min(1.0, max(0.0, float(done) / float(total)))
@@ -1928,7 +1778,7 @@ class CASSIETerminal:
         state['percent'] = 0
 
     def _append_tail_marker(self, events, content_end, tail_end):
-        """在尾部补一个空事件，只把收尾时间延到拖尾结束（不产生音频）。"""
+        
         if tail_end <= content_end:
             return events
         events.append({
@@ -1943,12 +1793,7 @@ class CASSIETerminal:
 
     @staticmethod
     def timeline_bounds(events):
-        """返回 (正文结束, 含拖尾结束)。
-
-        不能简单取 end_ms 的最大值：整句模式下那条音频本身就带着拖尾，
-        它的 end_ms 等于整轨长度，会把「正文结束」也算成拖尾结束。
-        时间槽（end_ms 由未加效果的时长决定）才是正文边界。
-        """
+        
         real = [event for event in events if not event.get('silent')]
         content_end = max((event['end_ms'] for event in real), default=0)
         tail_end = max((event['start_ms'] + event.get('audio_length_ms', len(event['audio']))
@@ -1956,17 +1801,7 @@ class CASSIETerminal:
         return content_end, max(content_end, tail_end)
 
     def apply_reverb_to_events(self, events):
-        """按处理模式对广播套用走廊混响。
-
-        逐词模式：对每个正文事件单独加混响。每个词都有自己的拖尾，
-        拖尾自然叠到下一个词上；开销随词数线性增长（每词都要跑满一条拖尾）。
-
-        整句模式：先把时间线按声道拼成干声，再对每个声道**整体**做一次后处理。
-        同样长度的拖尾只算一次，因此耗时基本与词数无关；代价是逐词的
-        音高/效果差异会被统一，且不同声道各自独立加混响。
-
-        单词的 start_ms / end_ms 与模式无关，两种模式的时间线完全一致。
-        """
+        
         if not self.spatial_active() or not events:
             return events
 
@@ -1979,7 +1814,6 @@ class CASSIETerminal:
             self.set_progress_stage('reverb', len(speakable))
 
         for event in events:
-            # 铃声走独立声道，不加混响，避免和正文叠在一起变浑
             if event['channel'] == self.bell_channel:
                 continue
             processed = self.apply_room_reverb(event['audio'])
@@ -1992,7 +1826,7 @@ class CASSIETerminal:
         return self._append_tail_marker(events, content_end, tail_end)
 
     def _mix_channel(self, events, channel, frame_rate, total_ms):
-        """把某个声道的所有事件叠加成一条干声轨。"""
+        
         track = AudioSegment.silent(duration=total_ms, frame_rate=frame_rate).set_sample_width(2)
         for event in events:
             if event['channel'] != channel or len(event['audio']) == 0:
@@ -2002,14 +1836,7 @@ class CASSIETerminal:
         return track
 
     def _apply_sentence_processing(self, events):
-        """整句模式：按声道拼干声 → 整轨做一次效果链与混响 → 替换事件列表。
-
-        整句模式把逐词的效果链也一起搬到这里，好处是：
-          * 混响只跑一遍（省掉「每词一条拖尾」的重复计算）
-          * 高音尾音、底噪、压缩也只在整段上做一次，比逐词叠加更自然
-        返回的事件列表只保留实际发声的声道（一般是 1~2 条），
-        因此播放与导出都只需要盯着一条长音频。
-        """
+        
         frame_rate = int(self._audio_frame_rate(events))
         content_end = max((event['end_ms'] for event in events), default=0)
         if content_end <= 0:
@@ -2037,8 +1864,6 @@ class CASSIETerminal:
                 'audio_length_ms': len(track),
                 'channel': channel,
                 'audio': track,
-                # 取 spoken_words 而非 label：日志要逐片段显示，
-                # 不能出现"整句"这种用户没听到过的字样。
                 'words': [piece
                           for event in events
                           if event['channel'] == channel
@@ -2111,7 +1936,6 @@ class CASSIETerminal:
             except:
                 pass
             return []
-
 
         stutter_match = re.match(r'^\[stutter:(\d+)(?:,(\w+))?\](.+)$', segment)
         if stutter_match:
@@ -2509,7 +2333,6 @@ class CASSIETerminal:
             self.is_playing = False
             self.stop_requested = False
 
-
     def play_broadcast_stream(self, text, lock_acquired=False):
         owns_lock = lock_acquired
         if not owns_lock and not self.play_lock.acquire(False):
@@ -2528,7 +2351,6 @@ class CASSIETerminal:
             self.is_playing = True
             playable = [event for event in events if len(event['audio']) > 0]
 
-            # 只按行拆分，不重算读法：label / spoken_words 在生成事件时已算好。
             def log_pieces(event):
                 if event.get('words'):
                     pieces = event['words']
@@ -2538,11 +2360,9 @@ class CASSIETerminal:
                     pieces = [event.get('label', '')]
                 return [str(piece) for piece in pieces if str(piece).strip()]
 
-            # 按各片段的真实音频长度定位日志时刻，不能用时间槽等分：
-            # 时间槽含混响拖尾，等分会让后面的片段和实际听到的时刻对不上。
             schedule = []
             if self.verbose_mode:
-                timeline = []      # [(相对起点毫秒, 文本), ...] 已按时间排序
+                timeline = []
                 for event in playable:
                     if event['channel'] == self.bell_channel:
                         continue
@@ -2565,7 +2385,7 @@ class CASSIETerminal:
             cursor = 0
 
             def due_logs(before_ms):
-                """吐出所有应当在 before_ms 之前出现的日志，并按真实时钟等待。"""
+                
                 nonlocal cursor
                 while cursor < len(schedule) and schedule[cursor][0] <= before_ms:
                     at_ms, text = schedule[cursor]
@@ -2603,8 +2423,6 @@ class CASSIETerminal:
                     time.sleep(delay)
                 duration = self._play_audio_segment(event['channel'], event['audio'], wait=False)
                 channel_ready[event['channel']] = time.monotonic() + duration
-                # 进度按"讲述时间"推进而非事件条数：事件长短不一，
-                # 按条数算会让进度和听到的位置对不上
                 played_ms = int(event_start_ms + duration)
                 self._set_progress_position(played_ms, max(1, total_play_ms))
                 self._emit_progress()
@@ -2616,8 +2434,6 @@ class CASSIETerminal:
                        "duration_ms": total_play_ms,
                        "elapsed_ms": played_ms}
 
-            # 事件循环结束后补完剩余日志（最后一条事件之后的部分）。
-            # 被停止时不再等——否则用户按了停止还要陪着把剩余时间睡完。
             if not self.stop_requested:
                 for entry in due_logs(float('inf')):
                     yield entry
@@ -2653,12 +2469,7 @@ class CASSIETerminal:
     def _export_from_queue_unlocked(self, text, output_path, include_bell=False, device=None,
                                     pitch=1.0, speed=-10, enable_number_reading=False,
                                     enable_special_bell=False):
-        """合成到文件。
-
-        进度按三个阶段上报：parse（解析+排期）、reverb（逐词加空间效果，
-        最慢的一步）、export（混音写盘）。逐词加效果那一步是唯一能按单位
-        推进的，所以 begin_progress 的总量就是可加效果的事件数。
-        """
+        
         if not text:
             return False, tr('nothing_to_export')
         self.set_progress_stage('parse')
@@ -2669,7 +2480,6 @@ class CASSIETerminal:
         if not plan['events']:
             return False, '; '.join(plan['errors']) or tr('no_export_audio')
 
-        # 收尾哨兵是空的，只用来延长总时长，不能拿它取采样参数
         audio_events = [event for event in plan['events'] if len(event['audio']) > 0]
         if not audio_events:
             return False, '; '.join(plan['errors']) or tr('no_export_audio')
@@ -2707,16 +2517,15 @@ class CASSIETerminal:
         self.export_audio(audio, export_path)
         return export_path
 
-
     def snapshot_settings(self):
-        """读取当前所有可调参数，作为一次调用的默认值。"""
+        
         snapshot = {}
         for field in API_MUTABLE_FIELDS:
             snapshot[field] = getattr(self, field, SYNTHESIS_PARAM_DEFAULTS.get(field))
         return snapshot
 
     def merged_settings(self, overrides=None):
-        """把请求里的覆盖项合并到当前参数之上。"""
+        
         snapshot = self.snapshot_settings()
         for key, value in (overrides or {}).items():
             if key in API_MUTABLE_FIELDS and value is not None:
@@ -2725,7 +2534,7 @@ class CASSIETerminal:
 
     @contextlib.contextmanager
     def settings_snapshot(self, overrides=None):
-        """在给定参数下临时运行一段逻辑，退出时保证还原。"""
+        
         settings = self.merged_settings(overrides)
         with self.settings_lock:
             backup = self.snapshot_settings()
@@ -2738,11 +2547,11 @@ class CASSIETerminal:
                     setattr(self, key, value)
 
     def list_words(self):
-        """返回素材库里所有可用单词（含北约音标、字母与数字音）。"""
+        
         return sorted(self.word_set)
 
     def list_sounds(self):
-        """返回 sounds 与 words 目录里的可用铃声文件名。"""
+        
         names = set()
         for base in (SOUND_BASE_PATH, AUDIO_BASE_PATH):
             if not os.path.isdir(base):
@@ -2753,7 +2562,7 @@ class CASSIETerminal:
         return sorted(names)
 
     def library_status(self):
-        """素材库概况：文件数、缺失项与配置好的铃声文件是否存在。"""
+        
         words_dir = [f for f in os.listdir(AUDIO_BASE_PATH)
                      if f.lower().endswith(AUDIO_EXTENSION)] if os.path.isdir(AUDIO_BASE_PATH) else []
         sounds_dir = [f for f in os.listdir(SOUND_BASE_PATH)
@@ -2772,12 +2581,12 @@ class CASSIETerminal:
         }
 
     def validate_text(self, text):
-        """拼写检查：返回文本里没有对应音频的单词。"""
+        
         not_found = self.check_spelling(text or '')
         return {'text': text or '', 'not_found': not_found, 'ok': not not_found}
 
     def plan_broadcast(self, text, overrides=None):
-        """只解析不合成，返回时间线摘要，便于调用方先校验再渲染。"""
+        
         with self.settings_snapshot(overrides) as settings:
             started = time.monotonic()
             plan = self.interpret_broadcast_text(
@@ -2791,8 +2600,6 @@ class CASSIETerminal:
             elapsed = time.monotonic() - started
         all_events = plan['events']
         events = [event for event in all_events if not event.get('silent')]
-        # 正文边界由解释器给出：整句模式下事件音频自带拖尾，
-        # 从事件上反推会把拖尾算进正文
         content_end = int(plan.get('content_ms', 0))
         tail_end = int(plan.get('duration_ms', 0))
         return {
@@ -2818,7 +2625,7 @@ class CASSIETerminal:
         }
 
     def synthesize(self, text, output_path=None, overrides=None, filename=None):
-        """合成广播为 WAV 文件，返回 (成功, 结果或错误, 元数据)。"""
+        
         if not text or not text.strip():
             return False, tr('content_empty'), {}
 
@@ -2859,7 +2666,7 @@ class CASSIETerminal:
             }
 
     def start_playback(self, text, overrides=None):
-        """异步播放广播，返回 (是否启动, 错误信息)。"""
+        
         if not text or not text.strip():
             return False, tr('content_empty')
         if self.is_playing:
@@ -2880,19 +2687,18 @@ class CASSIETerminal:
         return True, ''
 
     def stop_playback(self):
-        """请求停止播放并立刻静音所有声道。"""
+        
         self.stop_requested = True
         self.stop_all_audio()
         return True
 
     def health(self):
-        """运行状况自检。"""
+        
         status = self.library_status()
         return {
             'api_version': API_VERSION,
             'project_version': PROJECT_VERSION,
             'status': 'ok',
-            # 当前请求生效的语言，前端可据此确认语言协商的结果
             'language': current_language(),
             'pid': os.getpid(),
             'started_at': getattr(self, 'started_at', None),
@@ -2910,11 +2716,7 @@ class CASSIETerminal:
         }
 
     def feature_flags(self):
-        """当前进程实际支持的功能指纹。
-
-        用反射判断，避免手工维护：某个功能对应的方法存在就说明这份代码有它。
-        排查"改了没生效"时对照这里最快。
-        """
+        
         checks = {
             'spoken_label': 'spoken_label',
             'spoken_parts': 'spoken_parts',
@@ -2934,7 +2736,7 @@ class CASSIETerminal:
         return flags
 
     def api_documentation(self):
-        """返回接口清单，供客户端自动发现。"""
+        
         return {
             'api_version': API_VERSION,
             'prefix': API_PREFIX,
@@ -2946,17 +2748,14 @@ class CASSIETerminal:
             'mutable_fields': list(API_MUTABLE_FIELDS),
         }
 
-
 _API_ROUTES = {}
 
-
 def api_route(rule, method='GET'):
-    """注册 API 路由并记录清单，便于 /api/v1 自描述。"""
+    
     def decorator(func):
         _API_ROUTES.setdefault(rule, []).append(method.upper())
         return route(API_PREFIX + rule, method=method)(func)
     return decorator
-
 
 def api_success(data=None, status=200, **extra):
     response.status = status
@@ -2966,7 +2765,6 @@ def api_success(data=None, status=200, **extra):
     payload.update(extra)
     response.content_type = 'application/json; charset=UTF-8'
     return json.dumps(payload, ensure_ascii=False)
-
 
 def api_error(message, code='bad_request', status=400, **extra):
     response.status = status
@@ -2979,9 +2777,8 @@ def api_error(message, code='bad_request', status=400, **extra):
     payload.update(extra)
     return json.dumps(payload, ensure_ascii=False)
 
-
 def api_payload():
-    """读取并校验请求体，支持 JSON 与 form 两种方式。"""
+    
     raw = request.body.read()
     if not raw:
         return {}
@@ -2991,9 +2788,8 @@ def api_payload():
         return None
     return data if isinstance(data, dict) else None
 
-
 def api_guard():
-    """可选的 API Key 校验。设置了 CASSIE_API_KEY 环境变量才启用。"""
+    
     expected = os.environ.get('CASSIE_API_KEY')
     if not expected:
         return None
@@ -3002,23 +2798,11 @@ def api_guard():
         return None
     return api_error(tr('api_key_invalid'), code='unauthorized', status=401)
 
-
 cassie = CASSIETerminal()
 
-
 def serve_local_file(relative_path, root):
-    """发送项目内的静态文件，并强制浏览器每次都回来校验。
-
-    默认的 static_file 只给 Last-Modified、不给 Cache-Control，浏览器会
-    按「启发式缓存」自行决定缓存多久（可能好几小时）。结果是改了前端但
-    用户看到的还是旧页面——甚至连 cassie_play.html 本身都被缓存，
-    于是脚本标签上的 ?v= 版本号根本到不了浏览器，怎么刷新都没用。
-
-    这里自己发文件，因为 static_file() 把它自己的 header 延后到响应
-    收尾阶段才写入，路由里再 set_header 会被它覆盖掉。
-    """
+    
     target = os.path.normpath(os.path.join(root, relative_path))
-    # 防目录穿越：规范化后必须仍在 root 内
     root_abs = os.path.normpath(os.path.abspath(root))
     target_abs = os.path.normpath(os.path.abspath(target))
     if not target_abs.startswith(root_abs + os.sep) and target_abs != root_abs:
@@ -3033,7 +2817,6 @@ def serve_local_file(relative_path, root):
 
     with open(target_abs, 'rb') as handle:
         return handle.read()
-
 
 @route('/cassie_play')
 def index():
@@ -3122,7 +2905,6 @@ def play():
         cassie.speed = data.get('speed', -10)
         
         def generate():
-            # 进度回调存在线程局部里，同一个线程消费生成器，所以是安全的
             queue = []
 
             def on_progress(stage, done, total, percent):
@@ -3135,7 +2917,6 @@ def play():
                     cassie.estimate_preprocess_event(data.get('text', '')),
                     ensure_ascii=False))
                 for log in cassie.play_broadcast_stream(data.get('text', ''), lock_acquired=True):
-                    # 攒下的进度事件要先发，否则时序会乱
                     while queue:
                         yield "data: {}\n\n".format(
                             json.dumps(queue.pop(0), ensure_ascii=False))
@@ -3159,15 +2940,7 @@ def play():
 
 @route('/export_progress', method='POST')
 def export_wav_with_progress():
-    """带真实进度的导出（SSE）。
-
-    合成完之前不发音频本体，只发进度事件；最后一条 `done` 带上文件名，
-    浏览器再走一次 /export 拿文件。这样进度条反映的是**服务端真实进度**，
-    而不是前端猜的动画。
-
-    用 SSE 而不是轮询：合成是单线程阻塞的，轮询需要另起线程共享状态，
-    而 SSE 天然就是"一边算一边推"。
-    """
+    
     body = request.body.read().decode('utf-8')
     data = json.loads(body)
     text = data.get('text', '')
@@ -3240,7 +3013,6 @@ def export_wav_with_progress():
 
     return generate()
 
-
 @route('/export', method='POST')
 def export_wav():
     body = request.body.read().decode('utf-8')
@@ -3285,7 +3057,6 @@ def export_wav():
             os.unlink(temp_path)
         return {'success': False, 'message': str(e)}
 
-
 @route('/get_advanced_settings', method='GET')
 def get_advanced_settings():
     return {
@@ -3316,7 +3087,6 @@ def get_advanced_settings():
         'spatial_quality': cassie.spatial_quality,
         'spatial_mode': cassie.spatial_mode,
         'spatial_quality_levels': [
-            # name / summary 是给前端渲染的文案，按当前请求语言取
             {'level': item['level'],
              'name': tr('spatial_level_{}_name'.format(item['level'])),
              'summary': tr('spatial_level_{}_summary'.format(item['level']))}
@@ -3376,14 +3146,9 @@ def save_advanced_settings():
         return {'success': False, 'message': tr('settings_save_failed', message=message)}
     return {'success': True}
 
-
-# HTTP API：全部挂在 /api/v1 下，响应是 JSON 信封；
-# 只有 /api/v1/synthesize?download=1 例外，直接返回 WAV。
-
 def _api_ready():
-    """统一的鉴权入口，返回 None 表示通过，否则返回错误响应。"""
+    
     return api_guard()
-
 
 @api_route('')
 @api_route('/')
@@ -3393,14 +3158,12 @@ def api_index():
         return guard
     return api_success(cassie.api_documentation())
 
-
 @api_route('/health')
 def api_health():
     guard = _api_ready()
     if guard:
         return guard
     return api_success(cassie.health())
-
 
 @api_route('/words')
 def api_words():
@@ -3410,7 +3173,6 @@ def api_words():
     words = cassie.list_words()
     return api_success({'count': len(words), 'words': words})
 
-
 @api_route('/sounds')
 def api_sounds():
     guard = _api_ready()
@@ -3418,7 +3180,6 @@ def api_sounds():
         return guard
     sounds = cassie.list_sounds()
     return api_success({'count': len(sounds), 'sounds': sounds})
-
 
 @api_route('/validate', method='POST')
 def api_validate():
@@ -3432,7 +3193,6 @@ def api_validate():
     if not isinstance(text, str):
         return api_error(tr('text_must_be_string'))
     return api_success(cassie.validate_text(text))
-
 
 @api_route('/plan', method='POST')
 def api_plan():
@@ -3453,10 +3213,9 @@ def api_plan():
         return api_error(tr('plan_failed', error=error), code='plan_failed', status=500)
     return api_success(result)
 
-
 @api_route('/synthesize', method='POST')
 def api_synthesize():
-    """合成广播。默认返回 JSON（含 base64 音频），download=1 时直接返回 WAV。"""
+    
     guard = _api_ready()
     if guard:
         return guard
@@ -3477,7 +3236,6 @@ def api_synthesize():
 
     ok, result, metadata = cassie.synthesize(text, overrides=overrides, filename=filename)
     if not ok:
-        # 文案随语言变化，两种语言都要认得，才能给出 409
         status = 409 if any(message in str(result) for message in
                             (MESSAGES['zh']['play_busy'], MESSAGES['en']['play_busy'])) else 400
         return api_error(result, code='synthesize_failed', status=status)
@@ -3510,7 +3268,6 @@ def api_synthesize():
         body['audio_base64'] = base64.b64encode(payload).decode('ascii')
     return api_success(body)
 
-
 @api_route('/play', method='POST')
 def api_play():
     guard = _api_ready()
@@ -3528,7 +3285,6 @@ def api_play():
         return api_error(message, code='playback_rejected', status=409)
     return api_success({'playing': True, 'text': text}, status=202)
 
-
 @api_route('/stop', method='POST')
 def api_stop():
     guard = _api_ready()
@@ -3536,7 +3292,6 @@ def api_stop():
         return guard
     cassie.stop_playback()
     return api_success({'playing': False, 'stop_requested': True})
-
 
 @api_route('/status')
 def api_status():
@@ -3549,7 +3304,6 @@ def api_status():
         'play_lock_held': bool(cassie.play_lock.locked()),
     })
 
-
 @api_route('/settings')
 def api_get_settings():
     guard = _api_ready()
@@ -3560,7 +3314,6 @@ def api_get_settings():
         'defaults': SYNTHESIS_PARAM_DEFAULTS,
         'mutable_fields': list(API_MUTABLE_FIELDS),
     })
-
 
 @api_route('/settings', method='POST')
 @api_route('/settings', method='PUT')
@@ -3608,7 +3361,6 @@ def api_set_settings():
 
     return api_success({'applied': applied, 'settings': cassie.snapshot_settings()})
 
-
 @api_route('/presets')
 def api_list_presets():
     guard = _api_ready()
@@ -3616,7 +3368,6 @@ def api_list_presets():
         return guard
     presets = getattr(cassie, 'presets', {}) or {}
     return api_success({'count': len(presets), 'presets': presets})
-
 
 @api_route('/presets', method='POST')
 def api_save_preset():
@@ -3637,7 +3388,6 @@ def api_save_preset():
     return api_success({'name': name, 'content': content, 'count': len(cassie.presets)},
                        status=201)
 
-
 @api_route('/presets/<name>', method='DELETE')
 @api_route('/presets/<name>', method='GET')
 def api_preset_detail(name):
@@ -3656,7 +3406,6 @@ def api_preset_detail(name):
         return api_error(tr('preset_not_found', name=name), code='not_found', status=404)
     return api_success({'name': name, 'content': presets[name]})
 
-
 @api_route('/presets/<name>/play', method='POST')
 def api_play_preset(name):
     guard = _api_ready()
@@ -3670,14 +3419,11 @@ def api_play_preset(name):
         return api_error(message, code='playback_rejected', status=409)
     return api_success({'playing': True, 'name': name, 'text': presets[name]}, status=202)
 
-
 if __name__ == '__main__':
     _health = cassie.health()
     _missing = [name for name, present in _health['features'].items() if not present]
     _library = _health['library']
 
-    # 素材缺失时放在最前面说清楚：这是新用户最容易卡住的地方，
-    # 埋在后面的功能指纹里他们看不到。
     if not _library['word_files']:
         print()
         print('=' * 68)
@@ -3688,13 +3434,6 @@ if __name__ == '__main__':
         print(tr('assets_missing_after'))
         print('=' * 68)
         print()
-
-    print(tr('startup_banner', version=PROJECT_VERSION, started_at=_health['started_at']))
-    print(tr('startup_quality_levels', count=_health['spatial_quality_levels']))
-    print(tr('startup_fingerprint',
-             status=tr('startup_all_ready') if not _missing
-             else tr('startup_missing', items=', '.join(_missing)),
-             hint='' if not _missing else tr('startup_outdated_hint')))
-    print(tr('startup_health_hint'))
+        
     print(tr('startup_open_browser', port=port))
     run(host='localhost', port=port, server='cheroot', debug=True)

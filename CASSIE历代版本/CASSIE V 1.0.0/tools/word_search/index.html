@@ -8,9 +8,7 @@
     <link rel="stylesheet" href="/static/wordsearch.css">
 </head>
 <body>
-    <!-- 顶栏：返回主页链接 + i18n.js 自动挂载的语言切换控件
-         （观感是设计系统底座里的分段控件：4px 圆角 + 1px 描边，不是胶囊；
-         选中态是蓝 --toggle-active，由 glass.css 给出） -->
+    
     <div class="topbar">
         <a class="topbar__home" href="/cassie_play"
            data-i18n="ws.backHome" data-i18n-title="ws.backHomeTitle">返回主页</a>
@@ -25,9 +23,7 @@
 
         <div class="input-area">
             <label for="inputText" data-i18n="ws.inputLabel">输入广播内容</label>
-            <!-- spellcheck/autocomplete 关掉：广播文本本来就全小写、大量非词典词，
-                 浏览器会给几乎每个词画彩色波浪线，既没用，又会跟本页
-                 「红色波浪线 = 未命中」这套结果着色撞车 -->
+            
             <textarea id="inputText" data-i18n-placeholder="ws.inputPlaceholder"
                       placeholder="输入广播内容，全小写，标点符号左右加空格..."
                       spellcheck="false" autocomplete="off" autocapitalize="off"></textarea>
@@ -35,8 +31,7 @@
 
         <div class="button-group">
             <button id="checkBtn" class="ws-btn ws-btn--primary" type="button" data-i18n="ws.btn.check">检测</button>
-            <!-- 清空是破坏性动作（会丢掉已输入的广播），走红：静止时同样安静，
-                 只在悬停/聚焦时转红提示 -->
+            
             <button id="clearBtn" class="ws-btn ws-btn--danger" type="button" data-i18n="ws.btn.clear">清空</button>
             <button id="specialBtn" class="ws-btn ws-btn--quiet" type="button" data-i18n="ws.btn.special">特殊文件列表</button>
         </div>
@@ -67,7 +62,6 @@
         let wordList = [];
         let wordSet = new Set();
 
-        /* i18n 小包：动态文案走这里，切换语言时重新渲染一次 */
         function t(key, vars) {
             if (window.CASSIE_I18N && window.CASSIE_I18N.t) return window.CASSIE_I18N.t(key, vars);
             return key;
@@ -95,8 +89,6 @@
             return 'word-error';
         }
 
-        /* 词条是英文，只有包装语言的部分（括号、箭头说明）需要翻译；
-           这里从原始结果重新拼出展示文本，不改动任何匹配结果。 */
         function displayFor(result) {
             if (!result) return '';
             const text = result.display || '';
@@ -1135,11 +1127,6 @@
             'yankee': 'y', 'zulu': 'z'
         };
 
-        /* 注意：display 里只放**原始词条**，不要预先把「（标点）」这类说明拼进去。
-           这些说明由 displayFor() 按当前语言补上；两边都拼就会出现
-           「, （标点）（标点）」这样的重复标签。
-           带结构的类型（命中拆分）用 "词 → 目标" 的形式，
-           displayFor() 以 ' → ' 为分隔符还原成各个参数。 */
         function checkWord(word) {
             if (['.', ',', '\u3001'].includes(word)) {
                 return { found: true, type: 'punctuation', display: word };
@@ -1172,9 +1159,7 @@
                     return { found: true, type: 'letter', display: word + ' \u2192 ' + prefixed };
                 }
             }
-            /* 下面这些「词 → 词干」的 display 只放**结构**，后缀（+ t-ed / + -ish…）
-               由 displayFor() 按语言拼上。若这里也拼一遍，就会出现
-               「ableish → able + -ish + -ish」这种重复。 */
+            
             if (word.endsWith('ted')) {
                 const stem = word.slice(0, -3);
                 if (wordSet.has(stem) && wordSet.has('t-ed')) {
@@ -1255,7 +1240,7 @@
             </div>`;
             output.innerHTML = html + summary;
             output.setAttribute('data-state', 'results');
-            /* 也记下数字，供 i18n-wordsearch.js 在切换语言时重画 */
+            
             output.setAttribute('data-total', String(total));
             output.setAttribute('data-found', String(foundCount));
             output.setAttribute('data-missing', String(missingCount));
@@ -1296,7 +1281,7 @@
             for (const f of specialFiles) {
                 html += `<span class="special-chip">${f}</span>`;
             }
-            /* 顺便显示一下总数 */
+            
             html += `<div class="special-total">${t('ws.summary.specialTotal', { count: specialFiles.length })}</div>`;
             output.innerHTML = html;
             output.setAttribute('data-state', 'files');
@@ -1336,8 +1321,6 @@
             status.setAttribute('data-state', 'cleared');
         });
 
-        /* 切换语言：静态文案由 i18n.js 刷，这里把动态渲染过的结果重画一次。
-           结果不重算，只重用上次的数组，所以切换语言不会改变任何检测结论。 */
         window.addEventListener('cassie:langchange', function() {
             const output = document.getElementById('outputBox');
             const state = output.getAttribute('data-state');

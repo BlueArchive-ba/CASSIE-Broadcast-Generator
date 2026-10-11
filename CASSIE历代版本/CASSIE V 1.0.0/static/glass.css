@@ -1,4 +1,3 @@
-/* C.A.S.S.I.E. — 设计系统底座（黑底 / 白字 / 蓝红点缀） */
 
 :root {
     color-scheme: dark;
@@ -7,7 +6,7 @@
 
     --surface: #101010;
     --surface-raised: #161616;
-    --well: #050505;            /* 内凹区比底色更深 */
+    --well: #050505;            
     --control: #191919;
     --control-hover: #232323;
     --control-pressed: #121212;
@@ -31,7 +30,6 @@
     --red-soft: rgba(232, 64, 47, 0.16);
     --red-line: rgba(255, 107, 98, 0.50);
 
-    /* 语义别名：全站统一走这两个入口，页面里不要再写死色值 */
     --accent: var(--blue);
     --accent-bright: var(--blue-bright);
     --accent-soft: var(--blue-soft);
