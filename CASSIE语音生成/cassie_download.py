@@ -10,6 +10,7 @@ import requests
 from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
+
 from rich.console import Console
 from rich.table import Table
 from rich.panel import Panel
